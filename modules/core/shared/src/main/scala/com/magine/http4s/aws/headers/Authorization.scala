@@ -1,0 +1,52 @@
+/*
+ * Copyright 2025 Magine Pro
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package com.magine.http4s.aws.headers
+
+import cats.syntax.all.*
+import com.magine.http4s.aws.Credentials
+import com.magine.http4s.aws.internal.CanonicalRequest
+import com.magine.http4s.aws.internal.CredentialScope
+import com.magine.http4s.aws.internal.Signature
+import org.http4s.Header
+import org.http4s.Request
+import org.typelevel.ci.*
+
+private[aws] object Authorization {
+  def put[F[_]](
+    request: Request[F],
+    accessKeyId: Credentials.AccessKeyId,
+    canonicalRequest: CanonicalRequest,
+    credentialScope: CredentialScope,
+    signature: Signature
+  ): Request[F] =
+    request.putHeaders(
+      Header.Raw(
+        ci"Authorization",
+        show"AWS4-HMAC-SHA256 Credential=${accessKeyId.value}/${credentialScope.value}, SignedHeaders=${canonicalRequest.signedHeaders}, Signature=${signature.value}"
+      )
+    )
+
+  def putIfAbsent[F[_]](
+    request: Request[F],
+    accessKeyId: Credentials.AccessKeyId,
+    canonicalRequest: CanonicalRequest,
+    credentialScope: CredentialScope,
+    signature: Signature
+  ): Request[F] =
+    if (request.headers.contains[org.http4s.headers.Authorization]) request
+    else put(request, accessKeyId, canonicalRequest, credentialScope, signature)
+}
