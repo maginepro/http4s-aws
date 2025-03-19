@@ -12,7 +12,10 @@ val scala3Version = "3.3.5"
 inThisBuild(
   Seq(
     crossScalaVersions := Seq(scala213Version, scala3Version),
-    developers := List(tlGitHubDev("vlovgr", "Viktor Rudebeck")),
+    developers := List(
+      tlGitHubDev("janina9395", "Janina Komarova"),
+      tlGitHubDev("vlovgr", "Viktor Rudebeck"),
+    ),
     githubWorkflowJavaVersions := Seq(JavaSpec.temurin("17")),
     licenses := Seq(License.Apache2),
     organization := "com.magine",
