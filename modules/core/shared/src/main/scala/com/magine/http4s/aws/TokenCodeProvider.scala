@@ -19,7 +19,6 @@ package com.magine.http4s.aws
 import cats.effect.Sync
 import cats.syntax.all.*
 import scala.io.StdIn
-import scala.util.control.NoStackTrace
 
 /**
   * Capability to return [[TokenCode]]s from [[MfaSerial]]s.
@@ -54,7 +53,7 @@ object TokenCodeProvider {
           }
           .flatMap {
             case Some(input) => TokenCode(input).pure[F]
-            case None => StdInEnd().raiseError[F, Option[TokenCode]]
+            case None => Sync[F].raiseError(new RuntimeException("Unexpected end of input"))
           }
           .flatMap {
             case Some(tokenCode) =>
@@ -64,8 +63,4 @@ object TokenCodeProvider {
                 tokenCode(mfaSerial)
           }
     }
-
-  final case class StdInEnd() extends RuntimeException with NoStackTrace {
-    override def getMessage: String = "Unexpected end of input"
-  }
 }
