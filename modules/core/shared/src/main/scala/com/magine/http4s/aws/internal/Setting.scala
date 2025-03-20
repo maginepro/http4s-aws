@@ -90,6 +90,18 @@ private[aws] object Setting {
       Sync[F].pure(Credentials.AccessKeyId(value))
   }
 
+  object ConfigFile
+    extends Setting[Path](
+      envName = "AWS_CONFIG_FILE",
+      propName = "aws.configFile",
+    ) {
+    override def fallback[F[_]: Sync]: F[Option[Path]] =
+      Sync[F].delay(Option(System.getProperty("user.home")).map(Paths.get(_, ".aws/config")))
+
+    override def parse[F[_]: Sync](value: String): F[Path] =
+      Sync[F].delay(Paths.get(value))
+  }
+
   object ContainerAuthorizationToken
     extends Setting[Header.Raw](
       envName = "AWS_CONTAINER_AUTHORIZATION_TOKEN",
