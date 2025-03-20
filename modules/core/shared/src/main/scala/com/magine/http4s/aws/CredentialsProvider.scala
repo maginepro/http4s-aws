@@ -48,7 +48,7 @@ import scala.concurrent.duration.*
   * - When running command-line applications, one typically requests
   *   temporary security credentials from the Security Token Service
   *   (STS) using the credentials in `~/.aws/credentials`, which can
-  *   be read by [[CredentialsProvider.credentialsFile]].
+  *   be read by `CredentialsProvider.credentialsFile`.
   * - When running a service in Elastic Container Service (ECS) or on
   *   Fargate, credentials are provided by a container endpoint, which
   *   can be read by [[CredentialsProvider.containerEndpoint]].
@@ -184,23 +184,42 @@ object CredentialsProvider {
 
   /**
     * Returns a new [[CredentialsProvider]] which reads credentials
-    * from `~/.aws/credentials` for the `default` profile.
+    * from `~/.aws/credentials` for a profile.
     *
     * The location of the credentials file can be set using either:
     *
     * - the `aws.sharedCredentialsFile` system property, or
-    * - the `AWS_SHARED_CREDENTIALS_FILE` environment variable.
+    * - the `AWS_SHARED_CREDENTIALS_FILE` environment variable, or
+    * - it will default to `~/.aws/credentials` if neither is set.
     *
     * The name of the profile can be set using either:
     *
     * - the `aws.profile` system property, or
-    * - the `AWS_PROFILE` environment variable.
+    * - the `AWS_PROFILE` environment variable, or
+    * - it will default to `default` if neither is set.
     *
     * Once credentials have successfully been read, the credentials
     * are cached indefinitely. This means subsequent updates to the
     * location, profile, or file will not be taken into account.
     */
   def credentialsFile[F[_]: Sync]: F[CredentialsProvider[F]] =
+    Profile.readOrDefault.flatMap(credentialsFile(_))
+
+    /**
+      * Returns a new [[CredentialsProvider]] which reads credentials
+      * from `~/.aws/credentials` for the specified profile.
+      *
+      * The location of the credentials file can be set using either:
+      *
+      * - the `aws.sharedCredentialsFile` system property, or
+      * - the `AWS_SHARED_CREDENTIALS_FILE` environment variable, or
+      * - it will default to `~/.aws/credentials` if neither is set.
+      *
+      * Once credentials have successfully been read, the credentials
+      * are cached indefinitely. This means subsequent updates to the
+      * location or file will not be taken into account.
+      */
+  def credentialsFile[F[_]: Sync](profileName: AwsProfileName): F[CredentialsProvider[F]] =
     Ref[F].of(Option.empty[Credentials]).map { ref =>
       new CredentialsProvider[F] {
         override val credentials: F[Credentials] =
@@ -209,24 +228,23 @@ object CredentialsProvider {
               credentials.pure
             case None =>
               for {
-                profile <- Profile.readOrDefault
                 credentialsFilePath <- SharedCredentialsFile.read
                   .map(_.toRight(MissingCredentials()))
                   .rethrow
                 _ <- ensureExists(credentialsFilePath)
                 credentialsFile <- readIniFile(credentialsFilePath)
                 accessKeyId <- credentialsFile
-                  .read(profile, "aws_access_key_id")
+                  .read(profileName.value, "aws_access_key_id")
                   .map(Credentials.AccessKeyId(_))
                   .toRight(MissingCredentials())
                   .liftTo
                 secretAccessKey <- credentialsFile
-                  .read(profile, "aws_secret_access_key")
+                  .read(profileName.value, "aws_secret_access_key")
                   .map(Credentials.SecretAccessKey(_))
                   .toRight(MissingCredentials())
                   .liftTo
                 sessionToken <- credentialsFile
-                  .read(profile, "aws_session_token")
+                  .read(profileName.value, "aws_session_token")
                   .map(Credentials.SessionToken(_))
                   .pure
                 credentials <- Credentials(accessKeyId, secretAccessKey, sessionToken).pure
@@ -260,7 +278,7 @@ object CredentialsProvider {
     *
     * - [[CredentialsProvider.systemProperties]] for system properties,
     * - [[CredentialsProvider.environmentVariables]] for environment variables,
-    * - [[CredentialsProvider.credentialsFile]] for a shared credentials file,
+    * - `CredentialsProvider.credentialsFile` for a shared credentials file,
     * - [[CredentialsProvider.containerEndpoint]] for a container endpoint.
     *
     * Subsequent credential requests will continue to use the first
