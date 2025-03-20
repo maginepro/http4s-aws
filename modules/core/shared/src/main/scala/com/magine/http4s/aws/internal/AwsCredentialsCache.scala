@@ -42,7 +42,7 @@ private[aws] trait AwsCredentialsCache[F[_]] {
 }
 
 private[aws] object AwsCredentialsCache {
-  def apply[F[_]: Sync]: AwsCredentialsCache[F] =
+  def default[F[_]: Sync]: AwsCredentialsCache[F] =
     new AwsCredentialsCache[F] {
       private def ensurePathExists(path: Path): F[Path] =
         Sync[F].blocking(
@@ -84,7 +84,7 @@ private[aws] object AwsCredentialsCache {
   /**
     * The file name of a credentials file in `~/.aws/cli/cache`.
     */
-  sealed abstract case class FileName(path: Path)
+  final case class FileName(path: Path)
 
   object FileName {
 
@@ -132,7 +132,7 @@ private[aws] object AwsCredentialsCache {
             )
           )
 
-        FileName.fromPath(Paths.get(s"$hash.json"))
+        FileName(Paths.get(s"$hash.json"))
       }
 
     def fromProfile[F[_]: Sync](profile: AwsProfile): F[FileName] =
@@ -142,8 +142,5 @@ private[aws] object AwsCredentialsCache {
         durationSeconds = profile.durationSeconds,
         mfaSerial = profile.mfaSerial
       )
-
-    private def fromPath(path: Path): FileName =
-      new FileName(path.getFileName) {}
   }
 }
