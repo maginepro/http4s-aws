@@ -148,14 +148,14 @@ private[aws] object Setting {
       com.magine.aws.Region.valid(value).liftTo[F]
   }
 
-
-  object Region
-    extends Setting[com.magine.aws.Region](
-      envName = "AWS_REGION",
-      propName = "aws.region"
+  object Profile
+    extends Setting.Default[AwsProfileName](
+      envName = "AWS_PROFILE",
+      propName = "aws.profile",
+      default = AwsProfileName.default
     ) {
-    override def parse[F[_]: Sync](value: String): F[com.magine.aws.Region] =
-      com.magine.aws.Region.valid(value).liftTo[F]
+    override def parse[F[_]: Sync](value: String): F[AwsProfileName] =
+      Sync[F].pure(AwsProfileName(value))
   }
 
   object SecretAccessKey
