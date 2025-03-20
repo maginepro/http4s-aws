@@ -53,7 +53,7 @@ object TokenCodeProvider {
           }
           .flatMap {
             case Some(input) => TokenCode(input).pure[F]
-            case None => Sync[F].raiseError(new RuntimeException("Unexpected end of input"))
+            case None => unexpectedEndOfInput.raiseError[F, Option[TokenCode]]
           }
           .flatMap {
             case Some(tokenCode) =>
@@ -62,5 +62,8 @@ object TokenCodeProvider {
               Sync[F].blocking(println("\nInvalid MFA code, must be 6 digits.")) >>
                 tokenCode(mfaSerial)
           }
+
+      private def unexpectedEndOfInput: Throwable =
+        new RuntimeException("Unexpected end of input")
     }
 }
