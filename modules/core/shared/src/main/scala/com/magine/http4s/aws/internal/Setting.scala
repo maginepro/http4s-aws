@@ -139,15 +139,15 @@ private[aws] object Setting {
       Sync[F].pure(value)
   }
 
-  object Profile
-    extends Setting.Default[AwsProfileName](
-      envName = "AWS_PROFILE",
-      propName = "aws.profile",
-      default = AwsProfileName.default
+  object DefaultRegion
+    extends Setting[com.magine.aws.Region](
+      envName = "AWS_DEFAULT_REGION",
+      propName = "aws.defaultRegion"
     ) {
-    override def parse[F[_]: Sync](value: String): F[AwsProfileName] =
-      Sync[F].pure(AwsProfileName(value))
+    override def parse[F[_]: Sync](value: String): F[com.magine.aws.Region] =
+      com.magine.aws.Region.valid(value).liftTo[F]
   }
+
 
   object Region
     extends Setting[com.magine.aws.Region](
