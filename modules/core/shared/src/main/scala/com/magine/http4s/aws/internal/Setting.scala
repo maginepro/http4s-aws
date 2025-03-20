@@ -18,6 +18,7 @@ package com.magine.http4s.aws.internal
 
 import cats.effect.Sync
 import cats.syntax.all.*
+import com.magine.http4s.aws.AwsProfileName
 import com.magine.http4s.aws.Credentials
 import java.nio.file.Path
 import java.nio.file.Paths
@@ -127,13 +128,13 @@ private[aws] object Setting {
   }
 
   object Profile
-    extends Setting.Default[String](
+    extends Setting.Default[AwsProfileName](
       envName = "AWS_PROFILE",
       propName = "aws.profile",
-      default = "default"
+      default = AwsProfileName.default
     ) {
-    override def parse[F[_]: Sync](value: String): F[String] =
-      Sync[F].pure(value)
+    override def parse[F[_]: Sync](value: String): F[AwsProfileName] =
+      Sync[F].pure(AwsProfileName(value))
   }
 
   object SecretAccessKey
