@@ -128,14 +128,13 @@ object CredentialsProvider {
   def containerEndpoint[F[_]: Async](client: Client[F]): Resource[F, CredentialsProvider[F]] = {
     def credentialsUri: F[Uri] =
       for {
-        path <- ContainerCredentialsRelativeUri.read[F]
-        endpoint <- ContainerServiceEndpoint.readOrDefault[F]
+        path <- ContainerCredentialsRelativeUri[F].read
+        endpoint <- ContainerServiceEndpoint[F].readOrDefault
         uri <- path match {
           case Some(path) =>
             Uri.fromString(endpoint ++ path).liftTo[F]
           case None =>
-            ContainerCredentialsFullUri
-              .read[F]
+            ContainerCredentialsFullUri[F].read
               .map(_.toRight(MissingCredentials()))
               .rethrow
         }
@@ -144,7 +143,7 @@ object CredentialsProvider {
     def requestCredentials: F[ExpiringCredentials] =
       for {
         uri <- credentialsUri
-        authorization <- ContainerAuthorizationToken.read[F]
+        authorization <- ContainerAuthorizationToken[F].read
         request = Request[F](Method.GET, uri).withHeaders(authorization.toList)
         expiring <- client.expect[ExpiringCredentials](request)
       } yield expiring
