@@ -31,7 +31,7 @@ private[aws] trait AwsConfig[F[_]] {
 }
 
 private[aws] object AwsConfig {
-  def apply[F[_]: Sync]: AwsConfig[F] =
+  def default[F[_]: Sync]: AwsConfig[F] =
     new AwsConfig[F] {
       override def read(profileName: AwsProfileName): F[AwsProfile] =
         for {
