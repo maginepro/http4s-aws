@@ -39,10 +39,10 @@ inThisBuild(
 lazy val root = tlCrossRootProject
   .aggregate(core)
 
-lazy val core = crossProject(JVMPlatform, JSPlatform, NativePlatform)
+lazy val core = crossProject(JVMPlatform)
   .in(file("modules/core"))
-  .settings(
-    name := "http4s-aws",
+  .settings(name := "http4s-aws")
+  .jvmSettings(
     libraryDependencies ++= Seq(
       "co.fs2" %% "fs2-core" % fs2Version,
       "com.magine" %% "aws-regions" % awsRegionsVersion,
