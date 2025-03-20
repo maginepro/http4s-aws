@@ -49,7 +49,7 @@ lazy val core = crossProject(JVMPlatform)
     libraryDependencies ++= Seq(
       "co.fs2" %% "fs2-core" % fs2Version,
       "com.magine" %% "aws-regions" % awsRegionsVersion,
-      "io.circe" %% "circe-core" % circeVersion,
+      "io.circe" %% "circe-parser" % circeVersion,
       "org.http4s" %% "http4s-circe" % http4sVersion,
       "org.http4s" %% "http4s-client" % http4sVersion,
       "org.http4s" %% "http4s-core" % http4sVersion,
