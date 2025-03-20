@@ -48,7 +48,7 @@ import scala.concurrent.duration.*
   * - When running command-line applications, one typically requests
   *   temporary security credentials from the Security Token Service
   *   (STS) using the credentials in `~/.aws/credentials`, which can
-  *   be read by [[CredentialsProvider.credentialsFile]].
+  *   be read by `CredentialsProvider.credentialsFile`.
   * - When running a service in Elastic Container Service (ECS) or on
   *   Fargate, credentials are provided by a container endpoint, which
   *   can be read by [[CredentialsProvider.containerEndpoint]].
@@ -278,7 +278,7 @@ object CredentialsProvider {
     *
     * - [[CredentialsProvider.systemProperties]] for system properties,
     * - [[CredentialsProvider.environmentVariables]] for environment variables,
-    * - [[CredentialsProvider.credentialsFile]] for a shared credentials file,
+    * - `CredentialsProvider.credentialsFile` for a shared credentials file,
     * - [[CredentialsProvider.containerEndpoint]] for a container endpoint.
     *
     * Subsequent credential requests will continue to use the first
