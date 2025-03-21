@@ -36,7 +36,7 @@ private[aws] final case class AwsAssumedRole(
   assumedRoleArn: AwsAssumedRole.AssumedRoleArn
 ) {
   def isFresh(now: Instant): Boolean =
-    now.isBefore(expiration.minus(1, ChronoUnit.MINUTES))
+    now.plus(1, ChronoUnit.MINUTES).isBefore(expiration)
 }
 
 private[aws] object AwsAssumedRole {
