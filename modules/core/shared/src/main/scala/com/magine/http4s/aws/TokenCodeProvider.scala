@@ -16,6 +16,7 @@
 
 package com.magine.http4s.aws
 
+import cats.Applicative
 import cats.effect.Sync
 import cats.syntax.all.*
 import scala.io.StdIn
@@ -66,4 +67,16 @@ object TokenCodeProvider {
       private def unexpectedEndOfInput: Throwable =
         new RuntimeException("Unexpected end of input")
     }
+
+    /**
+      * Returns a new [[TokenCodeProvider]] which always returns
+      * the specified [[TokenCode]].
+      */
+  def static[F[_]: Applicative](tokenCode: TokenCode): TokenCodeProvider[F] = {
+    val result = tokenCode.pure[F]
+    new TokenCodeProvider[F] {
+      override def tokenCode(mfaSerial: MfaSerial): F[TokenCode] =
+        result
+    }
+  }
 }
