@@ -16,7 +16,7 @@
 
 package com.magine.http4s.aws.internal
 
-import cats.effect.kernel.Sync
+import cats.effect.Sync
 import cats.parse.Parser
 import cats.syntax.all.*
 import com.magine.http4s.aws.AwsProfileName
