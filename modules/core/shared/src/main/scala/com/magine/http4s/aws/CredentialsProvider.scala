@@ -18,15 +18,25 @@ package com.magine.http4s.aws
 
 import cats.Applicative
 import cats.effect.Async
+import cats.effect.Deferred
+import cats.effect.Outcome
+import cats.effect.Poll
 import cats.effect.Ref
 import cats.effect.Resource
 import cats.effect.Sync
+import cats.effect.Temporal
 import cats.effect.syntax.all.*
 import cats.parse.Parser
 import cats.syntax.all.*
+import com.magine.http4s.aws.internal.AwsAssumedRole
+import com.magine.http4s.aws.internal.AwsConfig
+import com.magine.http4s.aws.internal.AwsCredentialsCache
+import com.magine.http4s.aws.internal.AwsProfile
+import com.magine.http4s.aws.internal.AwsSts
 import com.magine.http4s.aws.internal.ExpiringCredentials
 import com.magine.http4s.aws.internal.IniFile
 import com.magine.http4s.aws.internal.Setting.*
+import fs2.hashing.Hashing
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
@@ -326,6 +336,112 @@ object CredentialsProvider {
           sessionToken <- SessionToken.env
         } yield Credentials(accessKeyId, secretAccessKey, sessionToken)
     }
+
+  def securityTokenService[F[_]: Async: Hashing](
+    client: Client[F]
+  ): F[CredentialsProvider[F]] =
+    Profile.readOrDefault.flatMap(securityTokenService(client, _))
+
+  def securityTokenService[F[_]: Async: Hashing](
+    client: Client[F],
+    profileName: AwsProfileName
+  ): F[CredentialsProvider[F]] =
+    securityTokenService(client, profileName, TokenCodeProvider.default)
+
+  def securityTokenService[F[_]: Async: Hashing](
+    client: Client[F],
+    profileName: AwsProfileName,
+    tokenCodeProvider: TokenCodeProvider[F]
+  ): F[CredentialsProvider[F]] = {
+    def missingRegion: Throwable =
+      new RuntimeException(s"Missing region for profile ${profileName.value}")
+
+    for {
+      profile <- AwsConfig.default.read(profileName)
+      provider <- CredentialsProvider.credentialsFile(AwsProfileName.default)
+      region <- DefaultRegion.read.map(_.orElse(profile.region).toRight(missingRegion)).rethrow
+      securityTokenService <- securityTokenService(
+        profile = profile,
+        tokenCodeProvider = tokenCodeProvider,
+        credentialsCache = AwsCredentialsCache.default[F],
+        sts = AwsSts.fromClient(client, provider, region)
+      )
+    } yield securityTokenService
+  }
+
+  private[aws] def securityTokenService[F[_]](
+    profile: AwsProfile,
+    tokenCodeProvider: TokenCodeProvider[F],
+    credentialsCache: AwsCredentialsCache[F],
+    sts: AwsSts[F]
+  )(
+    implicit F: Temporal[F]
+  ): F[CredentialsProvider[F]] = {
+    type Result = Either[Throwable, AwsAssumedRole]
+
+    sealed trait State
+    case class Cached(assumedRole: Option[AwsAssumedRole]) extends State
+    case class Renewing(deferred: Deferred[F, Result]) extends State
+
+    for {
+      assumedRole <- credentialsCache.read(profile)
+      ref <- Ref.of[F, State](Cached(assumedRole))
+    } yield new CredentialsProvider[F] {
+      sealed trait Action {
+        def run(poll: Poll[F]): F[Credentials]
+      }
+
+      case class Renew(deferred: Deferred[F, Result]) extends Action {
+        private def complete(outcome: Outcome[F, Throwable, AwsAssumedRole]): F[Unit] =
+          for {
+            result <- outcome.embedError.attempt
+            _ <- deferred.complete(result)
+            _ <- ref.update(_ => Cached(result.toOption))
+          } yield ()
+
+        private def assumeRole: F[AwsAssumedRole] =
+          for {
+            tokenCode <- tokenCodeProvider.tokenCode(profile.mfaSerial)
+            assumedRole <- sts.assumeRole(
+              roleArn = profile.roleArn,
+              roleSessionName = profile.roleSessionName,
+              durationSeconds = profile.durationSeconds,
+              mfaSerial = profile.mfaSerial,
+              tokenCode = tokenCode
+            )
+            _ <- credentialsCache.write(assumedRole)
+          } yield assumedRole
+
+        override def run(poll: Poll[F]): F[Credentials] =
+          poll(assumeRole).guaranteeCase(complete).map(_.credentials)
+      }
+
+      case class Return(credentials: Credentials) extends Action {
+        override def run(poll: Poll[F]): F[Credentials] =
+          poll(credentials.pure)
+      }
+
+      case class Wait(deferred: Deferred[F, Result]) extends Action {
+        override def run(poll: Poll[F]): F[Credentials] =
+          poll(deferred.get.rethrow.map(_.credentials))
+      }
+
+      def action: F[Action] =
+        Deferred[F, Result].flatMap { deferred =>
+          F.realTimeInstant.flatMap { now =>
+            ref.modify {
+              case cached @ Cached(Some(assumedRole)) if assumedRole.isFresh(now) =>
+                (cached, Return(assumedRole.credentials))
+              case Cached(_) => (Renewing(deferred), Renew(deferred))
+              case renewing @ Renewing(deferred) => (renewing, Wait(deferred))
+            }
+          }
+        }
+
+      override def credentials: F[Credentials] =
+        F.uncancelable(poll => action.flatMap(_.run(poll)))
+    }
+  }
 
   /**
     * Returns a new [[CredentialsProvider]] which always returns
