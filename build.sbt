@@ -8,8 +8,10 @@ val catsVersion = "2.13.0"
 val circeVersion = "0.14.10"
 val fs2Version = "3.11.0"
 val http4sVersion = "0.23.30"
+val munitCatsEffectVersion = "2.0.0"
 val scala213Version = "2.13.16"
 val scala3Version = "3.3.5"
+val scalaCheckEffectMunitVersion = "2.0.0-M2"
 
 inThisBuild(
   Seq(
@@ -56,7 +58,10 @@ lazy val core = crossProject(JVMPlatform)
       "org.typelevel" %% "case-insensitive" % caseInsensitiveVersion,
       "org.typelevel" %% "cats-core" % catsVersion,
       "org.typelevel" %% "cats-effect-kernel" % catsEffectVersion,
+      "org.typelevel" %% "cats-effect-testkit" % catsEffectVersion % Test,
       "org.typelevel" %% "cats-effect" % catsEffectVersion,
-      "org.typelevel" %% "cats-parse" % catsParseVersion
+      "org.typelevel" %% "cats-parse" % catsParseVersion,
+      "org.typelevel" %% "munit-cats-effect" % munitCatsEffectVersion % Test,
+      "org.typelevel" %% "scalacheck-effect-munit" % scalaCheckEffectMunitVersion % Test
     )
   )
