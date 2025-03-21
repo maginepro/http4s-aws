@@ -16,6 +16,7 @@
 
 package com.magine.http4s.aws.internal
 
+import cats.effect.Ref
 import cats.effect.Sync
 import cats.syntax.all.*
 import com.magine.http4s.aws.MfaSerial
@@ -79,6 +80,30 @@ private[aws] object AwsCredentialsCache {
         existingCachePath
           .map(_.resolve(assumedRole.cacheFileName.path))
           .flatMap(writeFile(_, assumedRole.asJson))
+    }
+
+  def empty[F[_]: Sync]: F[AwsCredentialsCache[F]] =
+    Ref[F].of(Map.empty[FileName, AwsAssumedRole]).map(fromRef)
+
+  def one[F[_]: Sync](profile: AwsProfile, assumedRole: AwsAssumedRole): F[AwsCredentialsCache[F]] =
+    for {
+      fileName <- FileName.fromProfile(profile)
+      ref <- Ref[F].of(Map(fileName -> assumedRole))
+    } yield fromRef(ref)
+
+  def option[F[_]: Sync](
+    profile: AwsProfile,
+    assumedRole: Option[AwsAssumedRole]
+  ): F[AwsCredentialsCache[F]] =
+    assumedRole.map(one(profile, _)).getOrElse(empty)
+
+  def fromRef[F[_]: Sync](ref: Ref[F, Map[FileName, AwsAssumedRole]]): AwsCredentialsCache[F] =
+    new AwsCredentialsCache[F] {
+      override def read(profile: AwsProfile): F[Option[AwsAssumedRole]] =
+        FileName.fromProfile(profile).flatMap(fileName => ref.get.map(_.get(fileName)))
+
+      override def write(assumedRole: AwsAssumedRole): F[Unit] =
+        ref.update(_.updated(assumedRole.cacheFileName, assumedRole))
     }
 
   /**
