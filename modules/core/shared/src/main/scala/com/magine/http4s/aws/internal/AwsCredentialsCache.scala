@@ -83,7 +83,7 @@ private[aws] object AwsCredentialsCache {
     }
 
   def empty[F[_]: Sync]: F[AwsCredentialsCache[F]] =
-    Ref[F].of(Map.empty[FileName, AwsAssumedRole]).map(fromRef)
+    Ref[F].of(Map.empty[FileName, AwsAssumedRole]).map(fromRef[F])
 
   def one[F[_]: Sync](profile: AwsProfile, assumedRole: AwsAssumedRole): F[AwsCredentialsCache[F]] =
     for {
