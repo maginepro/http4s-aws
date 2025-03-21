@@ -109,7 +109,7 @@ private[aws] object AwsCredentialsCache {
   /**
     * The file name of a credentials file in `~/.aws/cli/cache`.
     */
-  final case class FileName(path: Path)
+  sealed abstract case class FileName(path: Path)
 
   object FileName {
 
@@ -157,7 +157,7 @@ private[aws] object AwsCredentialsCache {
             )
           )
 
-        FileName(Paths.get(s"$hash.json"))
+        new FileName(Paths.get(s"$hash.json")) {}
       }
 
     def fromProfile[F[_]: Sync](profile: AwsProfile): F[FileName] =
