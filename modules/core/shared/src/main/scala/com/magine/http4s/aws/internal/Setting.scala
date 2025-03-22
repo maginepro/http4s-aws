@@ -148,13 +148,13 @@ private[aws] object Setting {
         Sync[F].pure(value)
     }
 
-  def DefaultRegion[F[_]: Sync]: Setting[F, Region] =
+  def DefaultRegion[F[_]: Sync]: Setting[F, com.magine.aws.Region] =
     new Setting.Standard[F, Region](
       envName = "AWS_DEFAULT_REGION",
       propName = "aws.defaultRegion"
     ) {
-      override def parse(value: String): F[Region] =
-        Region.valid(value).liftTo[F]
+      override def parse(value: String): F[com.magine.aws.Region] =
+        com.magine.aws.Region.valid(value).liftTo[F]
     }
 
   def Profile[F[_]: Sync]: Setting.Default[F, AwsProfileName] =
@@ -165,6 +165,15 @@ private[aws] object Setting {
     ) {
       override def parse(value: String): F[AwsProfileName] =
         Sync[F].pure(AwsProfileName(value))
+    }
+
+  def Region[F[_]: Sync]: Setting[F, com.magine.aws.Region] =
+    new Setting.Standard[F, Region](
+      envName = "AWS_REGION",
+      propName = "aws.region"
+    ) {
+      override def parse(value: String): F[com.magine.aws.Region] =
+        com.magine.aws.Region.valid(value).liftTo[F]
     }
 
   def SecretAccessKey[F[_]: Sync]: Setting[F, Credentials.SecretAccessKey] =
