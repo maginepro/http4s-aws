@@ -22,8 +22,9 @@ import cats.syntax.all.*
 import com.magine.http4s.aws.AwsProfileName
 import com.magine.http4s.aws.MissingCredentials
 import com.magine.http4s.aws.internal.Setting.ConfigFile
-import java.nio.charset.StandardCharsets
+import java.nio.charset.StandardCharsets.UTF_8
 import java.nio.file.Files
+import java.nio.file.NoSuchFileException
 import java.nio.file.Path
 
 private[aws] trait AwsConfig[F[_]] {
@@ -38,7 +39,6 @@ private[aws] object AwsConfig {
           configFilePath <- ConfigFile.read
             .map(_.toRight(MissingCredentials()))
             .rethrow
-          _ <- ensureExists(configFilePath)
           configFile <- readIniFile(configFilePath)
           title = if (profileName.isDefault) "default" else s"profile ${profileName.value}"
           profile <- configFile.sections
@@ -48,17 +48,11 @@ private[aws] object AwsConfig {
             .liftTo[F]
         } yield profile
 
-      def ensureExists(path: Path): F[Unit] =
-        Sync[F]
-          .blocking(path.toFile.exists())
-          .ifM(Sync[F].unit, Sync[F].raiseError(MissingCredentials()))
-
       def readIniFile(path: Path): F[IniFile] =
         Sync[F]
-          .blocking(Files.readAllBytes(path))
-          .map(new String(_, StandardCharsets.UTF_8))
-          .map(IniFile.parse(_).leftMap(failedToParse(path, _)))
-          .rethrow
+          .blocking(new String(Files.readAllBytes(path), UTF_8))
+          .adaptError { case _: NoSuchFileException => MissingCredentials() }
+          .flatMap(IniFile.parse(_).leftMap(failedToParse(path, _)).liftTo[F])
 
       def failedToParse(path: Path, error: Parser.Error): Throwable =
         new RuntimeException(s"Failed to parse config file at $path: ${error.show}")
