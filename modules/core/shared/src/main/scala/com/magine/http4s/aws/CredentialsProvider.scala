@@ -356,9 +356,10 @@ object CredentialsProvider {
     def missingRegion: Throwable =
       new RuntimeException(s"Missing region for profile ${profileName.value}")
 
+    // TODO: left here
     for {
       profile <- AwsConfig.default.read(profileName)
-      provider <- CredentialsProvider.credentialsFile(AwsProfileName.default)
+      provider <- CredentialsProvider.credentialsFile(profile.sourceProfile)
       region <- DefaultRegion.read.map(_.orElse(profile.region).toRight(missingRegion)).rethrow
       securityTokenService <- securityTokenService(
         profile = profile,

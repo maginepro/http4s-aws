@@ -28,6 +28,7 @@ private[aws] final case class AwsProfile(
   roleArn: AwsProfile.RoleArn,
   roleSessionName: AwsProfile.RoleSessionName,
   durationSeconds: Option[AwsProfile.DurationSeconds],
+  sourceProfile: AwsProfileName,
   mfaSerial: MfaSerial,
   region: Option[Region]
 )
@@ -60,6 +61,7 @@ private[aws] object AwsProfile {
             ),
         missing = Right(None)
       ),
+      decodeAs[AwsProfileName](profileName, section, "source_profile")(AwsProfileName(_).asRight),
       decodeAs[MfaSerial](profileName, section, "mfa_serial")(MfaSerial(_).asRight),
       decodeAs[Option[Region]](profileName, section, "region")(
         decode = value =>
