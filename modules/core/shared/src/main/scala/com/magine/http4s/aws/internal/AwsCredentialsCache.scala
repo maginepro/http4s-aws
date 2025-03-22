@@ -20,15 +20,15 @@ import cats.effect.Ref
 import cats.effect.Sync
 import cats.syntax.all.*
 import com.magine.http4s.aws.MfaSerial
-import fs2.io.IOException
 import io.circe.Decoder
 import io.circe.Json
 import io.circe.JsonObject
 import io.circe.Printer
 import io.circe.parser.decode
 import io.circe.syntax.*
-import java.nio.charset.StandardCharsets
+import java.nio.charset.StandardCharsets.UTF_8
 import java.nio.file.Files
+import java.nio.file.NoSuchFileException
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.security.MessageDigest
@@ -51,28 +51,31 @@ private[aws] object AwsCredentialsCache {
           else Files.createDirectories(path)
         )
 
-      private def existingCachePath: F[Path] =
+      private def missingUserHome: Throwable =
+        new RuntimeException("Missing system property user.home")
+
+      private def cachePath: F[Path] =
         Sync[F]
-          .delay(Option(System.getProperty("user.home")).map(Paths.get(_, ".aws/cli/cache")))
-          .flatMap(_.traverse(ensurePathExists))
-          .flatMap {
-            case Some(path) => path.pure
-            case None => new RuntimeException("Missing system property user.home").raiseError
-          }
+          .delay(Option(System.getProperty("user.home")))
+          .flatMap(_.toRight(missingUserHome).liftTo[F])
+          .map(Paths.get(_, ".aws/cli/cache"))
+
+      private def existingCachePath: F[Path] =
+        cachePath.flatMap(ensurePathExists)
 
       private def writeFile(path: Path, json: Json): F[Unit] =
-        Sync[F].blocking(Files.write(path, json.spaces2.getBytes(StandardCharsets.UTF_8))).void
+        Sync[F].blocking(Files.write(path, json.spaces2.getBytes(UTF_8))).void
 
       override def read(profile: AwsProfile): F[Option[AwsAssumedRole]] =
         FileName.fromProfile(profile).flatMap { fileName =>
-          existingCachePath.map(_.resolve(fileName.path)).flatMap { path =>
+          cachePath.map(_.resolve(fileName.path)).flatMap { path =>
             implicit val decoder: Decoder[AwsAssumedRole] =
               AwsAssumedRole.decoder(fileName)
 
             Sync[F]
-              .blocking(new String(Files.readAllBytes(path), StandardCharsets.UTF_8))
+              .blocking(new String(Files.readAllBytes(path), UTF_8))
               .flatMap(decode[AwsAssumedRole](_).map(_.some).liftTo[F])
-              .recover { case _: IOException => none }
+              .recover { case _: NoSuchFileException => none }
           }
         }
 
@@ -131,7 +134,7 @@ private[aws] object AwsCredentialsCache {
         def sha1Hex(s: String): String =
           MessageDigest
             .getInstance("SHA-1")
-            .digest(s.getBytes(StandardCharsets.UTF_8))
+            .digest(s.getBytes(UTF_8))
             .map("%02x".format(_))
             .mkString
 
