@@ -37,8 +37,9 @@ import com.magine.http4s.aws.internal.ExpiringCredentials
 import com.magine.http4s.aws.internal.IniFile
 import com.magine.http4s.aws.internal.Setting.*
 import fs2.hashing.Hashing
-import java.nio.charset.StandardCharsets
+import java.nio.charset.StandardCharsets.UTF_8
 import java.nio.file.Files
+import java.nio.file.NoSuchFileException
 import java.nio.file.Path
 import java.time.Instant
 import java.time.temporal.ChronoUnit
@@ -240,7 +241,6 @@ object CredentialsProvider {
                 credentialsFilePath <- SharedCredentialsFile.read
                   .map(_.toRight(MissingCredentials()))
                   .rethrow
-                _ <- ensureExists(credentialsFilePath)
                 credentialsFile <- readIniFile(credentialsFilePath)
                 accessKeyId <- credentialsFile
                   .read(profileName.value, "aws_access_key_id")
@@ -261,17 +261,11 @@ object CredentialsProvider {
               } yield credentials
           }
 
-        private def ensureExists(path: Path): F[Unit] =
-          Sync[F]
-            .blocking(path.toFile.exists())
-            .ifM(Sync[F].unit, Sync[F].raiseError(MissingCredentials()))
-
         private def readIniFile(path: Path): F[IniFile] =
           Sync[F]
-            .blocking(Files.readAllBytes(path))
-            .map(new String(_, StandardCharsets.UTF_8))
-            .map(IniFile.parse(_).leftMap(failedToParse(path, _)))
-            .rethrow
+            .blocking(new String(Files.readAllBytes(path), UTF_8))
+            .adaptError { case _: NoSuchFileException => MissingCredentials() }
+            .flatMap(IniFile.parse(_).leftMap(failedToParse(path, _)).liftTo[F])
 
         private def failedToParse(path: Path, error: Parser.Error): Throwable =
           new RuntimeException(s"Failed to parse credentials file at $path: ${error.show}")
