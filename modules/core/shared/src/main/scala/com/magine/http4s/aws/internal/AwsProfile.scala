@@ -16,6 +16,8 @@
 
 package com.magine.http4s.aws.internal
 
+import cats.data.NonEmptyChain
+import cats.data.ValidatedNec
 import cats.effect.Sync
 import cats.syntax.all.*
 import com.magine.aws.Region
@@ -54,19 +56,16 @@ private[aws] object AwsProfile {
     val default: DurationSeconds =
       DurationSeconds(3600)
 
-    def parse(value: String, profileName: AwsProfileName): Either[Throwable, DurationSeconds] =
-      value.toIntOption.map(apply).toRight(invalidDurationSeconds(value, profileName))
+    def parse(value: String): Either[String, DurationSeconds] =
+      value.toIntOption.map(apply).toRight(invalidDurationSeconds(value))
 
-    private def invalidDurationSeconds(value: String, profileName: AwsProfileName): Throwable =
-      new RuntimeException(s"Invalid duration_seconds $value for profile ${profileName.value}")
+    private def invalidDurationSeconds(value: String): String =
+      s"Invalid duration_seconds: $value"
   }
 
   object Region {
-    def parse(value: String, profileName: AwsProfileName): Either[Throwable, Region] =
-      com.magine.aws.Region.valid(value).leftMap(_ => invalidRegion(value, profileName))
-
-    private def invalidRegion(value: String, profileName: AwsProfileName): Throwable =
-      new RuntimeException(s"Invalid region $value for profile ${profileName.value}")
+    def parse(value: String): Either[String, Region] =
+      com.magine.aws.Region.valid(value).leftMap(_.getMessage)
   }
 
   def parse(
@@ -76,30 +75,41 @@ private[aws] object AwsProfile {
     val decode = Decode(section, profileName)
 
     (
-      profileName.asRight,
+      profileName.validNec,
       decode.required("role_arn", RoleArn(_).asRight),
       decode.required("role_session_name", RoleSessionName(_).asRight),
-      decode.optional("duration_seconds", DurationSeconds.parse(_, profileName)),
+      decode.optional("duration_seconds", DurationSeconds.parse(_)),
       decode.required("source_profile", AwsProfileName(_).asRight),
       decode.required("mfa_serial", MfaSerial(_).asRight),
-      decode.optional("region", Region.parse(_, profileName))
-    ).mapN(apply)
+      decode.optional("region", Region.parse(_))
+    ).mapN(apply).toEither.leftMap(parseError(profileName))
   }
 
+  private def parseError(profileName: AwsProfileName)(errors: NonEmptyChain[String]): Throwable =
+    if (errors.tail.isEmpty)
+      new RuntimeException(s"${errors.head} for profile ${profileName.value}")
+    else {
+      val messages = errors.toList.map(error => s"- $error").mkString("\n")
+      val message = s"Issues for profile ${profileName.value}:\n$messages"
+      new RuntimeException(message)
+    }
+
   private final case class Decode(section: IniFile.Section, profileName: AwsProfileName) {
-    def optional[A](key: String, decode: String => Either[Throwable, A]): Either[Throwable, Option[A]] =
+    def optional[A](key: String, decode: String => Either[String, A]): ValidatedNec[String, Option[A]] =
       section.keys
         .find(_.name == key)
         .map(section => decode(section.value).map(_.some))
         .getOrElse(Right(None))
+        .toValidatedNec
 
-    def required[A](key: String, decode: String => Either[Throwable, A]): Either[Throwable, A] =
+    def required[A](key: String, decode: String => Either[String, A]): ValidatedNec[String, A] =
       section.keys
         .find(_.name == key)
         .map(section => decode(section.value))
         .getOrElse(Left(missingRequired(key)))
+        .toValidatedNec
 
-    private def missingRequired(key: String): Throwable =
-      new RuntimeException(s"Missing required key $key for profile ${profileName.value}")
+    private def missingRequired(key: String): String =
+      s"Missing required key $key"
   }
 }
