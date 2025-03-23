@@ -33,31 +33,37 @@ private[aws] final case class AwsProfileResolved(
 )
 
 private[aws] object AwsProfileResolved {
-  def fromProfile[F[_]: Sync](profile: AwsProfile): F[AwsProfileResolved] = {
-    def resolveRegion: F[Region] =
-      Setting.Region.read
-        .flatMap(_.map(_.some.pure).getOrElse(Setting.DefaultRegion.read))
-        .flatMap(_.orElse(profile.region).toRight(missingRegion).liftTo[F])
-
-    def resolveRoleSessionName: F[AwsProfile.RoleSessionName] =
-      Setting.RoleSessionName.read
-        .map(_.orElse(profile.roleSessionName))
-        .flatMap(_.map(_.pure).getOrElse(AwsProfile.RoleSessionName.default))
-
-    def missingRegion: Throwable =
-      new RuntimeException(s"Missing region for profile ${profile.profileName.value}")
-
+  def fromProfile[F[_]: Sync](profile: AwsProfile): F[AwsProfileResolved] =
     for {
-      roleSessionName <- resolveRoleSessionName
-      region <- resolveRegion
+      roleArn <- resolveRoleArn(profile)
+      roleSessionName <- resolveRoleSessionName(profile)
+      region <- resolveRegion(profile)
     } yield AwsProfileResolved(
       profileName = profile.profileName,
-      roleArn = profile.roleArn,
+      roleArn = roleArn,
       roleSessionName = roleSessionName,
       durationSeconds = profile.durationSeconds,
       sourceProfile = profile.sourceProfile,
       mfaSerial = profile.mfaSerial,
       region = region
     )
-  }
+
+  private def resolveRoleArn[F[_]: Sync](profile: AwsProfile): F[AwsProfile.RoleArn] =
+    Setting.RoleArn.read.flatMap(_.orElse(profile.roleArn).toRight(missingRoleArn(profile)).liftTo[F])
+
+  private def resolveRoleSessionName[F[_]: Sync](profile: AwsProfile): F[AwsProfile.RoleSessionName] =
+    Setting.RoleSessionName.read
+      .map(_.orElse(profile.roleSessionName))
+      .flatMap(_.map(_.pure).getOrElse(AwsProfile.RoleSessionName.default))
+
+  private def resolveRegion[F[_]: Sync](profile: AwsProfile): F[Region] =
+    Setting.Region.read
+      .flatMap(_.map(_.some.pure).getOrElse(Setting.DefaultRegion.read))
+      .flatMap(_.orElse(profile.region).toRight(missingRegion(profile)).liftTo[F])
+
+  private def missingRoleArn(profile: AwsProfile): Throwable =
+    new RuntimeException(s"Missing role_arn for profile ${profile.profileName.value}")
+
+  private def missingRegion(profile: AwsProfile): Throwable =
+    new RuntimeException(s"Missing region for profile ${profile.profileName.value}")
 }

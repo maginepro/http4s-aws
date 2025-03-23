@@ -67,7 +67,7 @@ package object aws {
   implicit val awsProfileGen: Gen[AwsProfile] =
     for {
       profileName <- arbitrary[AwsProfileName]
-      roleArn <- arbitrary[AwsProfile.RoleArn]
+      roleArn <- arbitrary[Option[AwsProfile.RoleArn]]
       roleSessionName <- arbitrary[Option[AwsProfile.RoleSessionName]]
       durationSeconds <- arbitrary[Option[AwsProfile.DurationSeconds]]
       sourceProfile <- arbitrary[AwsProfileName]

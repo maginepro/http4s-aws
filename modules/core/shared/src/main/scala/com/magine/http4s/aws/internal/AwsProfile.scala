@@ -30,7 +30,7 @@ import com.magine.http4s.aws.MfaSerial
   */
 private[aws] final case class AwsProfile(
   profileName: AwsProfileName,
-  roleArn: AwsProfile.RoleArn,
+  roleArn: Option[AwsProfile.RoleArn],
   roleSessionName: Option[AwsProfile.RoleSessionName],
   durationSeconds: Option[AwsProfile.DurationSeconds],
   sourceProfile: AwsProfileName,
@@ -81,7 +81,7 @@ private[aws] object AwsProfile {
 
     (
       profileName.validNec,
-      decode.required("role_arn", RoleArn(_).asRight),
+      decode.optional("role_arn", RoleArn(_).asRight),
       decode.optional("role_session_name", RoleSessionName(_).asRight),
       decode.optional("duration_seconds", DurationSeconds.parse(_)),
       decode.required("source_profile", AwsProfileName(_).asRight),

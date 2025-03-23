@@ -176,6 +176,15 @@ private[aws] object Setting {
         com.magine.aws.Region.valid(value).liftTo[F]
     }
 
+  def RoleArn[F[_]: Sync]: Setting[F, AwsProfile.RoleArn] =
+    new Setting.Standard[F, AwsProfile.RoleArn](
+      envName = "AWS_ROLE_ARN",
+      propName = "aws.roleArn"
+    ) {
+      override def parse(value: String): F[AwsProfile.RoleArn] =
+        AwsProfile.RoleArn(value).pure
+    }
+
   def RoleSessionName[F[_]: Sync]: Setting[F, AwsProfile.RoleSessionName] =
     new Setting.Standard[F, AwsProfile.RoleSessionName](
       envName = "AWS_ROLE_SESSION_NAME",
