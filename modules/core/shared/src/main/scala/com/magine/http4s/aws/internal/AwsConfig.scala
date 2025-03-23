@@ -43,7 +43,7 @@ private[aws] object AwsConfig {
           title = if (profileName.isDefault) "default" else s"profile ${profileName.value}"
           profile <- configFile.sections
             .find(_.title == title)
-            .map(AwsProfile.fromSection(_, profileName))
+            .map(AwsProfile.parse(_, profileName))
             .getOrElse(MissingCredentials().asLeft)
             .liftTo[F]
         } yield profile

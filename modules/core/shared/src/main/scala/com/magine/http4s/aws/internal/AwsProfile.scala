@@ -16,6 +16,7 @@
 
 package com.magine.http4s.aws.internal
 
+import cats.effect.Sync
 import cats.syntax.all.*
 import com.magine.aws.Region
 import com.magine.http4s.aws.AwsProfileName
@@ -25,13 +26,22 @@ import com.magine.http4s.aws.MfaSerial
   * Represents a profile in the `~/.aws/config` file.
   */
 private[aws] final case class AwsProfile(
+  profileName: AwsProfileName,
   roleArn: AwsProfile.RoleArn,
   roleSessionName: AwsProfile.RoleSessionName,
   durationSeconds: Option[AwsProfile.DurationSeconds],
   sourceProfile: AwsProfileName,
   mfaSerial: MfaSerial,
   region: Option[Region]
-)
+) {
+  def resolveRegion[F[_]: Sync]: F[Region] =
+    Setting.Region.read
+      .flatMap(_.map(_.some.pure).getOrElse(Setting.DefaultRegion.read))
+      .flatMap(_.orElse(region).toRight(missingRegion).liftTo[F])
+
+  private def missingRegion: Throwable =
+    new RuntimeException(s"Missing region for profile ${profileName.value}")
+}
 
 private[aws] object AwsProfile {
   final case class RoleArn(value: String)
@@ -43,48 +53,53 @@ private[aws] object AwsProfile {
   object DurationSeconds {
     val default: DurationSeconds =
       DurationSeconds(3600)
+
+    def parse(value: String, profileName: AwsProfileName): Either[Throwable, DurationSeconds] =
+      value.toIntOption.map(apply).toRight(invalidDurationSeconds(value, profileName))
+
+    private def invalidDurationSeconds(value: String, profileName: AwsProfileName): Throwable =
+      new RuntimeException(s"Invalid duration_seconds $value for profile ${profileName.value}")
   }
 
-  def fromSection(
+  object Region {
+    def parse(value: String, profileName: AwsProfileName): Either[Throwable, Region] =
+      com.magine.aws.Region.valid(value).leftMap(_ => invalidRegion(value, profileName))
+
+    private def invalidRegion(value: String, profileName: AwsProfileName): Throwable =
+      new RuntimeException(s"Invalid region $value for profile ${profileName.value}")
+  }
+
+  def parse(
     section: IniFile.Section,
     profileName: AwsProfileName
-  ): Either[Throwable, AwsProfile] =
-    (
-      decodeAs[RoleArn](profileName, section, "role_arn")(RoleArn(_).asRight),
-      decodeAs[RoleSessionName](profileName, section, "role_session_name")(RoleSessionName(_).asRight),
-      decodeAs[Option[DurationSeconds]](profileName, section, "duration_seconds")(
-        decode = value =>
-          value.toIntOption
-            .map(DurationSeconds(_).some)
-            .toRight[Throwable](
-              new RuntimeException(s"Invalid duration_seconds $value for profile ${profileName.value}")
-            ),
-        missing = Right(None)
-      ),
-      decodeAs[AwsProfileName](profileName, section, "source_profile")(AwsProfileName(_).asRight),
-      decodeAs[MfaSerial](profileName, section, "mfa_serial")(MfaSerial(_).asRight),
-      decodeAs[Option[Region]](profileName, section, "region")(
-        decode = value =>
-          Region
-            .valid(value)
-            .map(_.some)
-            .leftMap(_ => new RuntimeException(s"Invalid region $value for profile ${profileName.value}")),
-        missing = Right(None)
-      )
-    ).mapN(apply)
+  ): Either[Throwable, AwsProfile] = {
+    val decode = Decode(section, profileName)
 
-  private def decodeAs[A](
-    profileName: AwsProfileName,
-    section: IniFile.Section,
-    key: String
-  )(
-    decode: String => Either[Throwable, A],
-    missing: => Either[Throwable, A] = Left(
-      new RuntimeException(s"Missing key $key for profile ${profileName.value}")
-    )
-  ): Either[Throwable, A] =
-    section.keys
-      .find(_.name == key)
-      .map(section => decode(section.value))
-      .getOrElse(missing)
+    (
+      profileName.asRight,
+      decode.required("role_arn", RoleArn(_).asRight),
+      decode.required("role_session_name", RoleSessionName(_).asRight),
+      decode.optional("duration_seconds", DurationSeconds.parse(_, profileName)),
+      decode.required("source_profile", AwsProfileName(_).asRight),
+      decode.required("mfa_serial", MfaSerial(_).asRight),
+      decode.optional("region", Region.parse(_, profileName))
+    ).mapN(apply)
+  }
+
+  private final case class Decode(section: IniFile.Section, profileName: AwsProfileName) {
+    def optional[A](key: String, decode: String => Either[Throwable, A]): Either[Throwable, Option[A]] =
+      section.keys
+        .find(_.name == key)
+        .map(section => decode(section.value).map(_.some))
+        .getOrElse(Right(None))
+
+    def required[A](key: String, decode: String => Either[Throwable, A]): Either[Throwable, A] =
+      section.keys
+        .find(_.name == key)
+        .map(section => decode(section.value))
+        .getOrElse(Left(missingRequired(key)))
+
+    private def missingRequired(key: String): Throwable =
+      new RuntimeException(s"Missing required key $key for profile ${profileName.value}")
+  }
 }

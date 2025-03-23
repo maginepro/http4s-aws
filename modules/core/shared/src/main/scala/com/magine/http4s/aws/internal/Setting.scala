@@ -60,7 +60,7 @@ private[aws] object Setting {
         .flatMap(_.traverse(parse))
 
     def fallback: F[Option[A]] =
-      Sync[F].pure(None)
+      None.pure
 
     def parse(value: String): F[A]
 
@@ -96,7 +96,7 @@ private[aws] object Setting {
       propName = "aws.accessKeyId"
     ) {
       override def parse(value: String): F[Credentials.AccessKeyId] =
-        Sync[F].pure(Credentials.AccessKeyId(value))
+        Credentials.AccessKeyId(value).pure
     }
 
   def ConfigFile[F[_]: Sync]: Setting[F, Path] =
@@ -117,7 +117,7 @@ private[aws] object Setting {
       propName = "aws.containerAuthorizationToken"
     ) {
       override def parse(value: String): F[Header.Raw] =
-        Sync[F].pure(Header.Raw(ci"Authorization", value))
+        Header.Raw(ci"Authorization", value).pure
     }
 
   def ContainerCredentialsRelativeUri[F[_]: Sync]: Setting[F, String] =
@@ -126,7 +126,7 @@ private[aws] object Setting {
       propName = "aws.containerCredentialsPath",
     ) {
       override def parse(value: String): F[String] =
-        Sync[F].pure(value)
+        value.pure
     }
 
   def ContainerCredentialsFullUri[F[_]: Sync]: Setting[F, Uri] =
@@ -145,7 +145,7 @@ private[aws] object Setting {
       default = "http://169.254.170.2"
     ) {
       override def parse(value: String): F[String] =
-        Sync[F].pure(value)
+        value.pure
     }
 
   def DefaultRegion[F[_]: Sync]: Setting[F, com.magine.aws.Region] =
@@ -164,7 +164,7 @@ private[aws] object Setting {
       default = AwsProfileName.default
     ) {
       override def parse(value: String): F[AwsProfileName] =
-        Sync[F].pure(AwsProfileName(value))
+        AwsProfileName(value).pure
     }
 
   def Region[F[_]: Sync]: Setting[F, com.magine.aws.Region] =
@@ -182,7 +182,7 @@ private[aws] object Setting {
       propName = "aws.secretAccessKey"
     ) {
       override def parse(value: String): F[Credentials.SecretAccessKey] =
-        Sync[F].pure(Credentials.SecretAccessKey(value))
+        Credentials.SecretAccessKey(value).pure
     }
 
   def SessionToken[F[_]: Sync]: Setting[F, Credentials.SessionToken] =
@@ -191,7 +191,7 @@ private[aws] object Setting {
       propName = "aws.sessionToken"
     ) {
       override def parse(value: String): F[Credentials.SessionToken] =
-        Sync[F].pure(Credentials.SessionToken(value))
+        Credentials.SessionToken(value).pure
     }
 
   def SharedCredentialsFile[F[_]: Sync]: Setting[F, Path] =

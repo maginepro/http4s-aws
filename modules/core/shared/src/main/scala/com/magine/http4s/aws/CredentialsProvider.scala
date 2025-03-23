@@ -346,17 +346,11 @@ object CredentialsProvider {
     client: Client[F],
     profileName: AwsProfileName,
     tokenCodeProvider: TokenCodeProvider[F]
-  ): F[CredentialsProvider[F]] = {
-    def missingRegion: Throwable =
-      new RuntimeException(s"Missing region for profile ${profileName.value}")
-
+  ): F[CredentialsProvider[F]] =
     for {
       profile <- AwsConfig.default.read(profileName)
+      region <- profile.resolveRegion
       provider <- CredentialsProvider.credentialsFile(profile.sourceProfile)
-      region <- Region.read
-        .flatMap(_.map(_.some.pure).getOrElse(DefaultRegion.read))
-        .map(_.orElse(profile.region).toRight(missingRegion))
-        .rethrow
       securityTokenService <- securityTokenService(
         profile = profile,
         tokenCodeProvider = tokenCodeProvider,
@@ -364,7 +358,6 @@ object CredentialsProvider {
         sts = AwsSts.fromClient(client, provider, region)
       )
     } yield securityTokenService
-  }
 
   private[aws] def securityTokenService[F[_]](
     profile: AwsProfile,

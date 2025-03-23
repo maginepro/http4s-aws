@@ -57,17 +57,27 @@ package object aws {
   implicit val regionArbitrary: Arbitrary[Region] =
     Arbitrary(regionGen)
 
+  implicit val awsProfileNameGen: Gen[AwsProfileName] =
+    arbitrary[String].map(AwsProfileName(_))
+
+  implicit val awsProfileNameArbitrary: Arbitrary[AwsProfileName] =
+    Arbitrary(awsProfileNameGen)
+
   implicit val awsProfileGen: Gen[AwsProfile] =
     for {
+      profileName <- arbitrary[AwsProfileName]
       roleArn <- arbitrary[AwsProfile.RoleArn]
       roleSessionName <- arbitrary[AwsProfile.RoleSessionName]
       durationSeconds <- arbitrary[Option[AwsProfile.DurationSeconds]]
+      sourceProfile <- arbitrary[AwsProfileName]
       mfaSerial <- arbitrary[MfaSerial]
       region <- arbitrary[Option[Region]]
     } yield AwsProfile(
+      profileName = profileName,
       roleArn = roleArn,
       roleSessionName = roleSessionName,
       durationSeconds = durationSeconds,
+      sourceProfile = sourceProfile,
       mfaSerial = mfaSerial,
       region = region
     )
