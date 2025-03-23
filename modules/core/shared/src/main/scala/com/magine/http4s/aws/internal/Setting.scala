@@ -60,7 +60,7 @@ private[aws] object Setting {
         .flatMap(_.traverse(parse))
 
     def fallback: F[Option[A]] =
-      None.pure
+      Sync[F].pure(None)
 
     def parse(value: String): F[A]
 
