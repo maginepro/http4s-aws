@@ -37,7 +37,7 @@ import java.security.MessageDigest
   * Capability to read and write credentials in `~/.aws/cli/cache`.
   */
 private[aws] trait AwsCredentialsCache[F[_]] {
-  def read(profile: AwsProfile): F[Option[AwsAssumedRole]]
+  def read(profile: AwsProfileResolved): F[Option[AwsAssumedRole]]
 
   def write(assumedRole: AwsAssumedRole): F[Unit]
 }
@@ -66,7 +66,7 @@ private[aws] object AwsCredentialsCache {
       private def writeFile(path: Path, json: Json): F[Unit] =
         Sync[F].blocking(Files.write(path, json.spaces2.getBytes(UTF_8))).void
 
-      override def read(profile: AwsProfile): F[Option[AwsAssumedRole]] =
+      override def read(profile: AwsProfileResolved): F[Option[AwsAssumedRole]] =
         FileName.fromProfile(profile).flatMap { fileName =>
           cachePath.map(_.resolve(fileName.path)).flatMap { path =>
             implicit val decoder: Decoder[AwsAssumedRole] =
@@ -88,21 +88,21 @@ private[aws] object AwsCredentialsCache {
   def empty[F[_]: Sync]: F[AwsCredentialsCache[F]] =
     Ref[F].of(Map.empty[FileName, AwsAssumedRole]).map(fromRef[F])
 
-  def one[F[_]: Sync](profile: AwsProfile, assumedRole: AwsAssumedRole): F[AwsCredentialsCache[F]] =
+  def one[F[_]: Sync](profile: AwsProfileResolved, assumedRole: AwsAssumedRole): F[AwsCredentialsCache[F]] =
     for {
       fileName <- FileName.fromProfile(profile)
       ref <- Ref[F].of(Map(fileName -> assumedRole))
     } yield fromRef(ref)
 
   def option[F[_]: Sync](
-    profile: AwsProfile,
+    profile: AwsProfileResolved,
     assumedRole: Option[AwsAssumedRole]
   ): F[AwsCredentialsCache[F]] =
     assumedRole.map(one(profile, _)).getOrElse(empty)
 
   def fromRef[F[_]: Sync](ref: Ref[F, Map[FileName, AwsAssumedRole]]): AwsCredentialsCache[F] =
     new AwsCredentialsCache[F] {
-      override def read(profile: AwsProfile): F[Option[AwsAssumedRole]] =
+      override def read(profile: AwsProfileResolved): F[Option[AwsAssumedRole]] =
         FileName.fromProfile(profile).flatMap(fileName => ref.get.map(_.get(fileName)))
 
       override def write(assumedRole: AwsAssumedRole): F[Unit] =
@@ -163,8 +163,8 @@ private[aws] object AwsCredentialsCache {
         new FileName(Paths.get(s"$hash.json")) {}
       }
 
-    def fromProfile[F[_]: Sync](profile: AwsProfile): F[FileName] =
-      apply(
+    def fromProfile[F[_]: Sync](profile: AwsProfileResolved): F[FileName] =
+      FileName(
         roleArn = profile.roleArn,
         roleSessionName = profile.roleSessionName,
         durationSeconds = profile.durationSeconds,

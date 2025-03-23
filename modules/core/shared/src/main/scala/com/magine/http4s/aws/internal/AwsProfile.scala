@@ -18,6 +18,7 @@ package com.magine.http4s.aws.internal
 
 import cats.data.NonEmptyChain
 import cats.data.ValidatedNec
+import cats.effect.Clock
 import cats.effect.Sync
 import cats.syntax.all.*
 import com.magine.aws.Region
@@ -30,25 +31,29 @@ import com.magine.http4s.aws.MfaSerial
 private[aws] final case class AwsProfile(
   profileName: AwsProfileName,
   roleArn: AwsProfile.RoleArn,
-  roleSessionName: AwsProfile.RoleSessionName,
+  roleSessionName: Option[AwsProfile.RoleSessionName],
   durationSeconds: Option[AwsProfile.DurationSeconds],
   sourceProfile: AwsProfileName,
   mfaSerial: MfaSerial,
   region: Option[Region]
 ) {
-  def resolveRegion[F[_]: Sync]: F[Region] =
-    Setting.Region.read
-      .flatMap(_.map(_.some.pure).getOrElse(Setting.DefaultRegion.read))
-      .flatMap(_.orElse(region).toRight(missingRegion).liftTo[F])
-
-  private def missingRegion: Throwable =
-    new RuntimeException(s"Missing region for profile ${profileName.value}")
+  def resolve[F[_]: Sync]: F[AwsProfileResolved] =
+    AwsProfileResolved.fromProfile(this)
 }
 
 private[aws] object AwsProfile {
   final case class RoleArn(value: String)
 
   final case class RoleSessionName(value: String)
+
+  object RoleSessionName {
+    def default[F[_]](
+      implicit F: Clock[F]
+    ): F[RoleSessionName] =
+      F.applicative.map(F.realTimeInstant)(now =>
+        RoleSessionName(s"http4s-aws-session-${now.getEpochSecond}")
+      )
+  }
 
   final case class DurationSeconds(value: Int)
 
@@ -77,7 +82,7 @@ private[aws] object AwsProfile {
     (
       profileName.validNec,
       decode.required("role_arn", RoleArn(_).asRight),
-      decode.required("role_session_name", RoleSessionName(_).asRight),
+      decode.optional("role_session_name", RoleSessionName(_).asRight),
       decode.optional("duration_seconds", DurationSeconds.parse(_)),
       decode.required("source_profile", AwsProfileName(_).asRight),
       decode.required("mfa_serial", MfaSerial(_).asRight),

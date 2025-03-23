@@ -37,7 +37,7 @@ final class CredentialsProviderSuite extends CatsEffectSuite with ScalaCheckEffe
   test("securityTokenService.cacheEmpty") {
     val gen =
       for {
-        profile <- awsProfileGen
+        profile <- awsProfileResolvedGen
         tokenCode <- tokenCodeGen
         assumedRoleFresh <- awsAssumedRoleFreshGen(profile)
       } yield (profile, tokenCode, assumedRoleFresh)
@@ -71,7 +71,7 @@ final class CredentialsProviderSuite extends CatsEffectSuite with ScalaCheckEffe
   test("securityTokenService.cacheFresh") {
     val gen =
       for {
-        profile <- awsProfileGen
+        profile <- awsProfileResolvedGen
         assumedRoleFresh <- awsAssumedRoleFreshGen(profile)
       } yield (profile, assumedRoleFresh)
 
@@ -100,7 +100,7 @@ final class CredentialsProviderSuite extends CatsEffectSuite with ScalaCheckEffe
   test("securityTokenService.cacheStale") {
     val gen =
       for {
-        profile <- awsProfileGen
+        profile <- awsProfileResolvedGen
         tokenCode <- tokenCodeGen
         assumedRoleStale <- Gen.oneOf(
           awsAssumedRoleStaleGen(profile),
@@ -139,7 +139,7 @@ final class CredentialsProviderSuite extends CatsEffectSuite with ScalaCheckEffe
   test("securityTokenService.renewCanceled") {
     val gen =
       for {
-        profile <- awsProfileGen
+        profile <- awsProfileResolvedGen
         tokenCode <- tokenCodeGen
         assumedRoleStale <- Gen.option(
           Gen.oneOf(
@@ -183,7 +183,7 @@ final class CredentialsProviderSuite extends CatsEffectSuite with ScalaCheckEffe
   test("securityTokenService.renewError") {
     val gen =
       for {
-        profile <- awsProfileGen
+        profile <- awsProfileResolvedGen
         assumedRoleStale <- Gen.option(
           Gen.oneOf(
             awsAssumedRoleStaleGen(profile),
@@ -218,7 +218,7 @@ final class CredentialsProviderSuite extends CatsEffectSuite with ScalaCheckEffe
   test("securityTokenService.renewOnce") {
     val gen =
       for {
-        profile <- awsProfileGen
+        profile <- awsProfileResolvedGen
         tokenCode <- tokenCodeGen
         assumedRoleStale <- Gen.option(
           Gen.oneOf(

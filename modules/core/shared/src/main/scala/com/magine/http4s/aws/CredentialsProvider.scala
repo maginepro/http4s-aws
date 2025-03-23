@@ -31,7 +31,7 @@ import cats.syntax.all.*
 import com.magine.http4s.aws.internal.AwsAssumedRole
 import com.magine.http4s.aws.internal.AwsConfig
 import com.magine.http4s.aws.internal.AwsCredentialsCache
-import com.magine.http4s.aws.internal.AwsProfile
+import com.magine.http4s.aws.internal.AwsProfileResolved
 import com.magine.http4s.aws.internal.AwsSts
 import com.magine.http4s.aws.internal.ExpiringCredentials
 import com.magine.http4s.aws.internal.IniFile
@@ -348,19 +348,18 @@ object CredentialsProvider {
     tokenCodeProvider: TokenCodeProvider[F]
   ): F[CredentialsProvider[F]] =
     for {
-      profile <- AwsConfig.default.read(profileName)
-      region <- profile.resolveRegion
+      profile <- AwsConfig.default.read(profileName).flatMap(_.resolve)
       provider <- CredentialsProvider.credentialsFile(profile.sourceProfile)
       securityTokenService <- securityTokenService(
         profile = profile,
         tokenCodeProvider = tokenCodeProvider,
         credentialsCache = AwsCredentialsCache.default[F],
-        sts = AwsSts.fromClient(client, provider, region)
+        sts = AwsSts.fromClient(client, provider, profile.region)
       )
     } yield securityTokenService
 
   private[aws] def securityTokenService[F[_]](
-    profile: AwsProfile,
+    profile: AwsProfileResolved,
     tokenCodeProvider: TokenCodeProvider[F],
     credentialsCache: AwsCredentialsCache[F],
     sts: AwsSts[F]

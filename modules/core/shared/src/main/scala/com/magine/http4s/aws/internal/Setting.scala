@@ -176,6 +176,15 @@ private[aws] object Setting {
         com.magine.aws.Region.valid(value).liftTo[F]
     }
 
+  def RoleSessionName[F[_]: Sync]: Setting[F, AwsProfile.RoleSessionName] =
+    new Setting.Standard[F, AwsProfile.RoleSessionName](
+      envName = "AWS_ROLE_SESSION_NAME",
+      propName = "aws.roleSessionName"
+    ) {
+      override def parse(value: String): F[AwsProfile.RoleSessionName] =
+        AwsProfile.RoleSessionName(value).pure
+    }
+
   def SecretAccessKey[F[_]: Sync]: Setting[F, Credentials.SecretAccessKey] =
     new Setting.Standard[F, Credentials.SecretAccessKey](
       envName = "AWS_SECRET_ACCESS_KEY",

@@ -21,6 +21,7 @@ import com.magine.aws.Region
 import com.magine.http4s.aws.internal.AwsAssumedRole
 import com.magine.http4s.aws.internal.AwsCredentialsCache
 import com.magine.http4s.aws.internal.AwsProfile
+import com.magine.http4s.aws.internal.AwsProfileResolved
 import java.time.Instant
 import org.scalacheck.Arbitrary
 import org.scalacheck.Arbitrary.arbitrary
@@ -67,7 +68,7 @@ package object aws {
     for {
       profileName <- arbitrary[AwsProfileName]
       roleArn <- arbitrary[AwsProfile.RoleArn]
-      roleSessionName <- arbitrary[AwsProfile.RoleSessionName]
+      roleSessionName <- arbitrary[Option[AwsProfile.RoleSessionName]]
       durationSeconds <- arbitrary[Option[AwsProfile.DurationSeconds]]
       sourceProfile <- arbitrary[AwsProfileName]
       mfaSerial <- arbitrary[MfaSerial]
@@ -84,6 +85,28 @@ package object aws {
 
   implicit val awsProfileArbitrary: Arbitrary[AwsProfile] =
     Arbitrary(awsProfileGen)
+
+  implicit val awsProfileResolvedGen: Gen[AwsProfileResolved] =
+    for {
+      profileName <- arbitrary[AwsProfileName]
+      roleArn <- arbitrary[AwsProfile.RoleArn]
+      roleSessionName <- arbitrary[AwsProfile.RoleSessionName]
+      durationSeconds <- arbitrary[Option[AwsProfile.DurationSeconds]]
+      sourceProfile <- arbitrary[AwsProfileName]
+      mfaSerial <- arbitrary[MfaSerial]
+      region <- arbitrary[Region]
+    } yield AwsProfileResolved(
+      profileName = profileName,
+      roleArn = roleArn,
+      roleSessionName = roleSessionName,
+      durationSeconds = durationSeconds,
+      sourceProfile = sourceProfile,
+      mfaSerial = mfaSerial,
+      region = region
+    )
+
+  implicit val awsProfileResolvedArbitrary: Arbitrary[AwsProfileResolved] =
+    Arbitrary(awsProfileResolvedGen)
 
   implicit val credentialsAccessKeyIdGen: Gen[Credentials.AccessKeyId] =
     arbitrary[String].map(Credentials.AccessKeyId(_))
@@ -118,11 +141,11 @@ package object aws {
     Arbitrary(credentialsGen)
 
   /* The effect here is to capture `MessageDigest` possibly being unavailable. */
-  def awsCredentialsCacheFileName(profile: AwsProfile): AwsCredentialsCache.FileName =
+  def awsCredentialsCacheFileName(profile: AwsProfileResolved): AwsCredentialsCache.FileName =
     AwsCredentialsCache.FileName.fromProfile[SyncIO](profile).unsafeRunSync()
 
   implicit val awsCredentialsCacheFileNameGen: Gen[AwsCredentialsCache.FileName] =
-    arbitrary[AwsProfile].flatMap(awsCredentialsCacheFileName(_))
+    arbitrary[AwsProfileResolved].flatMap(awsCredentialsCacheFileName(_))
 
   implicit val awsCredentialsCacheFileNameArbitrary: Arbitrary[AwsCredentialsCache.FileName] =
     Arbitrary(awsCredentialsCacheFileNameGen)
@@ -139,7 +162,7 @@ package object aws {
   implicit val awsAssumedRoleAssumedRoleArnArbitrary: Arbitrary[AwsAssumedRole.AssumedRoleArn] =
     Arbitrary(awsAssumedRoleAssumedRoleArnGen)
 
-  def awsAssumedRoleGen(expiration: Instant, profile: AwsProfile): Gen[AwsAssumedRole] =
+  def awsAssumedRoleGen(expiration: Instant, profile: AwsProfileResolved): Gen[AwsAssumedRole] =
     for {
       credentials <- arbitrary[Credentials]
       cacheFileName = awsCredentialsCacheFileName(profile)
@@ -154,7 +177,7 @@ package object aws {
     )
 
   /** AwsAssumedRole#isFresh will be `true` at epoch start. */
-  def awsAssumedRoleFreshGen(profile: AwsProfile): Gen[AwsAssumedRole] =
+  def awsAssumedRoleFreshGen(profile: AwsProfileResolved): Gen[AwsAssumedRole] =
     for {
       expiration <- Gen
         .chooseNum(61L, Instant.MAX.getEpochSecond)
@@ -163,7 +186,7 @@ package object aws {
     } yield assumedRole
 
   /** AwsAssumedRole#isFresh will be `false` at epoch start but credentials active. */
-  def awsAssumedRoleStaleGen(profile: AwsProfile): Gen[AwsAssumedRole] =
+  def awsAssumedRoleStaleGen(profile: AwsProfileResolved): Gen[AwsAssumedRole] =
     for {
       expiration <- Gen
         .chooseNum(1L, 60L)
@@ -172,7 +195,7 @@ package object aws {
     } yield assumedRole
 
   /** AwsAssumedRole#isFresh will be `false` at epoch start and credentials expired. */
-  def awsAssumedRoleExpiredGen(profile: AwsProfile): Gen[AwsAssumedRole] =
+  def awsAssumedRoleExpiredGen(profile: AwsProfileResolved): Gen[AwsAssumedRole] =
     for {
       expiration <- Gen
         .chooseNum(Instant.MIN.getEpochSecond, 0L)
@@ -183,7 +206,7 @@ package object aws {
   implicit val awsAssumedRoleGen: Gen[AwsAssumedRole] =
     for {
       expiration <- arbitrary[Instant]
-      profile <- arbitrary[AwsProfile]
+      profile <- arbitrary[AwsProfileResolved]
       assumedRole <- awsAssumedRoleGen(expiration, profile)
     } yield assumedRole
 
