@@ -336,6 +336,55 @@ object CredentialsProvider {
   ): F[CredentialsProvider[F]] =
     Profile.readOrDefault.flatMap(securityTokenService(client, _))
 
+  /**
+    * Returns a new [[CredentialsProvider]] which requests temporary
+    * security credentials from the Security Token Service (STS).
+    *
+    * This provider integrates with the AWS CLI through:
+    * - reading `~/.aws/config` for profile configuration details,
+    * - reading `~/.aws/credentials` for long-term credentials, and
+    * - reading and writing `~/.aws/cli/cache` for temporary credentials.
+    *
+    * The `~/.aws/config` file is expected to contain a profile entry:
+    * {{{
+    * [profile ...]
+    * role_arn = arn:aws:iam::123456789012:role/...
+    * role_session_name = ...
+    * duration_seconds = ...
+    * source_profile = default
+    * mfa_serial = arn:aws:iam::123456789012:mfa/...
+    * region = ...
+    * }}}
+    *
+    * and the `~/.aws/credentials` file an entry for the `source_profile`.
+    * {{{
+    * [default]
+    * aws_access_key_id = ...
+    * aws_secret_access_key = ...
+    * }}}
+    *
+    * The provider supports some environment variables (and system properties)
+    * used by the AWS CLI for configuring some of the paths and configuration
+    * details. The following AWS documentation page has more details on these.
+    *
+    * [[https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-envvars.html]]
+    *
+    * When the provider is created, it will look for cached credentials
+    * in the `~/.aws/cli/cache` directory. If no credentials are found,
+    * or if they have expired, the provider will prompt the user for a
+    * [[TokenCode]] from the `mfa_serial` and use it to request and
+    * cache new temporary credentials from STS. This happens the first
+    * time credentials are requested. The provider ensures there will
+    * only be at most one [[TokenCode]] request at the same time,
+    * despite possibly multiple simultaneous credential requests.
+    *
+    * The provider can read credentials cached by the AWS CLI, and the
+    * other way around. However, the provider will only read the cache
+    * when created, and not at later stages. Also, the `~/.aws/config`
+    * file is only read once when the provider is created. Similarly,
+    * the `~/.aws/credentials` file is read and cached the first time
+    * temporary credentials are requested from STS.
+    */
   def securityTokenService[F[_]: Async: Hashing](
     client: Client[F],
     profileName: AwsProfileName

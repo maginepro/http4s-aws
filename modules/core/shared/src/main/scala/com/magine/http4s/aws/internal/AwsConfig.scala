@@ -27,6 +27,9 @@ import java.nio.file.Files
 import java.nio.file.NoSuchFileException
 import java.nio.file.Path
 
+/**
+  * Capability to read configuration in `~/.aws/config`.
+  */
 private[aws] trait AwsConfig[F[_]] {
   def read(profileName: AwsProfileName): F[AwsProfile]
 }

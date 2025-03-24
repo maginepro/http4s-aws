@@ -26,7 +26,7 @@ import java.time.Instant
 import java.time.temporal.ChronoUnit
 
 /**
-  * Temporary credentials for a [[AwsProfile.RoleArn]].
+  * Temporary credentials for a [[AwsProfile.RoleArn]] from [[AwsSts]].
   */
 private[aws] final case class AwsAssumedRole(
   credentials: Credentials,

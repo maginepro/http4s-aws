@@ -17,7 +17,6 @@
 package com.magine.http4s.aws
 
 /**
-  * Represents the `mfa_serial` for a profile
-  * in the `~/.aws/config` file.
+  * Represents a `mfa_serial` in the `~/.aws/config` file.
   */
 final case class MfaSerial(value: String)

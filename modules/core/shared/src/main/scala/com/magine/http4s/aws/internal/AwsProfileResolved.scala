@@ -22,6 +22,14 @@ import com.magine.aws.Region
 import com.magine.http4s.aws.AwsProfileName
 import com.magine.http4s.aws.MfaSerial
 
+/**
+  * Represents a resolved profile in the `~/.aws/config` file.
+  *
+  * A resolved profile is an [[AwsProfile]] where the details
+  * required by [[AwsSts]] has been resolved. This is done by
+  * combining the configuration file, some system properties,
+  * some environment variables, and some default values.
+  */
 private[aws] final case class AwsProfileResolved(
   profileName: AwsProfileName,
   roleArn: AwsProfile.RoleArn,
