@@ -18,17 +18,28 @@ package com.magine.http4s.aws
 
 import cats.Applicative
 import cats.effect.Async
+import cats.effect.Deferred
+import cats.effect.Outcome
+import cats.effect.Poll
 import cats.effect.Ref
 import cats.effect.Resource
 import cats.effect.Sync
+import cats.effect.Temporal
 import cats.effect.syntax.all.*
 import cats.parse.Parser
 import cats.syntax.all.*
+import com.magine.http4s.aws.internal.AwsAssumedRole
+import com.magine.http4s.aws.internal.AwsConfig
+import com.magine.http4s.aws.internal.AwsCredentialsCache
+import com.magine.http4s.aws.internal.AwsProfileResolved
+import com.magine.http4s.aws.internal.AwsSts
 import com.magine.http4s.aws.internal.ExpiringCredentials
 import com.magine.http4s.aws.internal.IniFile
 import com.magine.http4s.aws.internal.Setting.*
-import java.nio.charset.StandardCharsets
+import fs2.hashing.Hashing
+import java.nio.charset.StandardCharsets.UTF_8
 import java.nio.file.Files
+import java.nio.file.NoSuchFileException
 import java.nio.file.Path
 import java.time.Instant
 import java.time.temporal.ChronoUnit
@@ -47,8 +58,9 @@ import scala.concurrent.duration.*
   *   variables read by [[CredentialsProvider.environmentVariables]].
   * - When running command-line applications, one typically requests
   *   temporary security credentials from the Security Token Service
-  *   (STS) using the credentials in `~/.aws/credentials`, which can
-  *   be read by `CredentialsProvider.credentialsFile`.
+  *   (STS) using `CredentialsProvider.securityTokenService`.
+  * - When using long-term credentials stored in `~/.aws/credentials`,
+  *   one can use `CredentialsProvider.credentialsFile` to read those.
   * - When running a service in Elastic Container Service (ECS) or on
   *   Fargate, credentials are provided by a container endpoint, which
   *   can be read by [[CredentialsProvider.containerEndpoint]].
@@ -128,14 +140,13 @@ object CredentialsProvider {
   def containerEndpoint[F[_]: Async](client: Client[F]): Resource[F, CredentialsProvider[F]] = {
     def credentialsUri: F[Uri] =
       for {
-        path <- ContainerCredentialsRelativeUri.read[F]
-        endpoint <- ContainerServiceEndpoint.readOrDefault[F]
+        path <- ContainerCredentialsRelativeUri[F].read
+        endpoint <- ContainerServiceEndpoint[F].readOrDefault
         uri <- path match {
           case Some(path) =>
             Uri.fromString(endpoint ++ path).liftTo[F]
           case None =>
-            ContainerCredentialsFullUri
-              .read[F]
+            ContainerCredentialsFullUri[F].read
               .map(_.toRight(MissingCredentials()))
               .rethrow
         }
@@ -144,7 +155,7 @@ object CredentialsProvider {
     def requestCredentials: F[ExpiringCredentials] =
       for {
         uri <- credentialsUri
-        authorization <- ContainerAuthorizationToken.read[F]
+        authorization <- ContainerAuthorizationToken[F].read
         request = Request[F](Method.GET, uri).withHeaders(authorization.toList)
         expiring <- client.expect[ExpiringCredentials](request)
       } yield expiring
@@ -231,7 +242,6 @@ object CredentialsProvider {
                 credentialsFilePath <- SharedCredentialsFile.read
                   .map(_.toRight(MissingCredentials()))
                   .rethrow
-                _ <- ensureExists(credentialsFilePath)
                 credentialsFile <- readIniFile(credentialsFilePath)
                 accessKeyId <- credentialsFile
                   .read(profileName.value, "aws_access_key_id")
@@ -252,17 +262,11 @@ object CredentialsProvider {
               } yield credentials
           }
 
-        private def ensureExists(path: Path): F[Unit] =
-          Sync[F]
-            .blocking(path.toFile.exists())
-            .ifM(Sync[F].unit, Sync[F].raiseError(MissingCredentials()))
-
         private def readIniFile(path: Path): F[IniFile] =
           Sync[F]
-            .blocking(Files.readAllBytes(path))
-            .map(new String(_, StandardCharsets.UTF_8))
-            .map(IniFile.parse(_).leftMap(failedToParse(path, _)))
-            .rethrow
+            .blocking(new String(Files.readAllBytes(path), UTF_8))
+            .adaptError { case _: NoSuchFileException => MissingCredentials() }
+            .flatMap(IniFile.parse(_).leftMap(failedToParse(path, _)).liftTo[F])
 
         private def failedToParse(path: Path, error: Parser.Error): Throwable =
           new RuntimeException(s"Failed to parse credentials file at $path: ${error.show}")
@@ -327,6 +331,157 @@ object CredentialsProvider {
           sessionToken <- SessionToken.env
         } yield Credentials(accessKeyId, secretAccessKey, sessionToken)
     }
+
+  def securityTokenService[F[_]: Async: Hashing](
+    client: Client[F]
+  ): F[CredentialsProvider[F]] =
+    Profile.readOrDefault.flatMap(securityTokenService(client, _))
+
+  /**
+    * Returns a new [[CredentialsProvider]] which requests temporary
+    * security credentials from the Security Token Service (STS).
+    *
+    * This provider integrates with the AWS CLI through:
+    * - reading `~/.aws/config` for profile configuration details,
+    * - reading `~/.aws/credentials` for long-term credentials, and
+    * - reading and writing `~/.aws/cli/cache` for temporary credentials.
+    *
+    * The `~/.aws/config` file is expected to contain a profile entry:
+    * {{{
+    * [profile ...]
+    * role_arn = arn:aws:iam::123456789012:role/...
+    * role_session_name = ...
+    * duration_seconds = ...
+    * source_profile = default
+    * mfa_serial = arn:aws:iam::123456789012:mfa/...
+    * region = ...
+    * }}}
+    *
+    * and the `~/.aws/credentials` file an entry for the `source_profile`.
+    * {{{
+    * [default]
+    * aws_access_key_id = ...
+    * aws_secret_access_key = ...
+    * }}}
+    *
+    * The provider supports some environment variables (and system properties)
+    * used by the AWS CLI for configuring some of the paths and configuration
+    * details. The following AWS documentation page has more details on these.
+    *
+    * [[https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-envvars.html]]
+    *
+    * When the provider is created, it will look for cached credentials
+    * in the `~/.aws/cli/cache` directory. If no credentials are found,
+    * or if they have expired, the provider will prompt the user for a
+    * [[TokenCode]] from the `mfa_serial` and use it to request and
+    * cache new temporary credentials from STS. This happens the first
+    * time credentials are requested. Cached credentials are considered
+    * expired when there is 1 minute or less left until the expiration
+    * time. The provider ensures there will be at most one [[TokenCode]]
+    * request at the same time, despite possibly multiple simultaneous
+    * credential requests.
+    *
+    * The provider can read credentials cached by the AWS CLI, and the
+    * other way around. However, the provider will only read the cache
+    * when created, and not at later stages. Also, the `~/.aws/config`
+    * file is only read once when the provider is created. Similarly,
+    * the `~/.aws/credentials` file is read and cached the first time
+    * temporary credentials are requested from STS.
+    */
+  def securityTokenService[F[_]: Async: Hashing](
+    client: Client[F],
+    profileName: AwsProfileName
+  ): F[CredentialsProvider[F]] =
+    securityTokenService(client, profileName, TokenCodeProvider.default)
+
+  def securityTokenService[F[_]: Async: Hashing](
+    client: Client[F],
+    profileName: AwsProfileName,
+    tokenCodeProvider: TokenCodeProvider[F]
+  ): F[CredentialsProvider[F]] =
+    for {
+      profile <- AwsConfig.default.read(profileName).flatMap(_.resolve)
+      provider <- CredentialsProvider.credentialsFile(profile.sourceProfile)
+      securityTokenService <- securityTokenService(
+        profile = profile,
+        tokenCodeProvider = tokenCodeProvider,
+        credentialsCache = AwsCredentialsCache.default[F],
+        sts = AwsSts.fromClient(client, provider, profile.region)
+      )
+    } yield securityTokenService
+
+  private[aws] def securityTokenService[F[_]](
+    profile: AwsProfileResolved,
+    tokenCodeProvider: TokenCodeProvider[F],
+    credentialsCache: AwsCredentialsCache[F],
+    sts: AwsSts[F]
+  )(
+    implicit F: Temporal[F]
+  ): F[CredentialsProvider[F]] = {
+    type Result = Either[Throwable, AwsAssumedRole]
+
+    sealed trait State
+    case class Cached(assumedRole: Option[AwsAssumedRole]) extends State
+    case class Renewing(deferred: Deferred[F, Result]) extends State
+
+    credentialsCache.read(profile).map(Cached(_)).flatMap(Ref[F].of[State](_)).map { ref =>
+      new CredentialsProvider[F] {
+        sealed trait Action {
+          def run(poll: Poll[F]): F[Credentials]
+        }
+
+        case class Renew(deferred: Deferred[F, Result]) extends Action {
+          private def complete(outcome: Outcome[F, Throwable, AwsAssumedRole]): F[Unit] =
+            for {
+              result <- outcome.embedError.attempt
+              _ <- deferred.complete(result)
+              _ <- ref.update(_ => Cached(result.toOption))
+            } yield ()
+
+          private def assumeRole: F[AwsAssumedRole] =
+            for {
+              tokenCode <- tokenCodeProvider.tokenCode(profile.mfaSerial)
+              assumedRole <- sts.assumeRole(
+                roleArn = profile.roleArn,
+                roleSessionName = profile.roleSessionName,
+                durationSeconds = profile.durationSeconds,
+                mfaSerial = profile.mfaSerial,
+                tokenCode = tokenCode
+              )
+              _ <- credentialsCache.write(assumedRole)
+            } yield assumedRole
+
+          override def run(poll: Poll[F]): F[Credentials] =
+            poll(assumeRole).guaranteeCase(complete).map(_.credentials)
+        }
+
+        case class Return(credentials: Credentials) extends Action {
+          override def run(poll: Poll[F]): F[Credentials] =
+            poll(credentials.pure)
+        }
+
+        case class Wait(deferred: Deferred[F, Result]) extends Action {
+          override def run(poll: Poll[F]): F[Credentials] =
+            poll(deferred.get.rethrow.map(_.credentials))
+        }
+
+        def action: F[Action] =
+          Deferred[F, Result].flatMap { deferred =>
+            F.realTimeInstant.flatMap { now =>
+              ref.modify {
+                case cached @ Cached(Some(assumedRole)) if assumedRole.isFresh(now) =>
+                  (cached, Return(assumedRole.credentials))
+                case Cached(_) => (Renewing(deferred), Renew(deferred))
+                case renewing @ Renewing(deferred) => (renewing, Wait(deferred))
+              }
+            }
+          }
+
+        override def credentials: F[Credentials] =
+          F.uncancelable(poll => action.flatMap(_.run(poll)))
+      }
+    }
+  }
 
   /**
     * Returns a new [[CredentialsProvider]] which always returns

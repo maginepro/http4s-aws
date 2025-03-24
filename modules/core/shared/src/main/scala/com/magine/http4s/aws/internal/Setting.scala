@@ -18,6 +18,7 @@ package com.magine.http4s.aws.internal
 
 import cats.effect.Sync
 import cats.syntax.all.*
+import com.magine.aws.Region
 import com.magine.http4s.aws.AwsProfileName
 import com.magine.http4s.aws.Credentials
 import java.nio.file.Path
@@ -37,34 +38,42 @@ import org.typelevel.ci.*
   * has been set. The [[env]] and [[prop]] functions can
   * be used to only read the environment variable or the
   * system property, respectively.
-  *
-  * The [[parse]] function must be implemented to parse
-  * the `String` value from the system property and the
-  * environment variable.
   */
-private[aws] sealed abstract class Setting[A](envName: String, propName: String) {
-  final def env[F[_]: Sync]: F[Option[A]] =
-    Sync[F]
-      .delay(Option(System.getenv(envName)))
-      .flatMap(_.traverse(parse[F]))
+private[aws] trait Setting[F[_], A] {
+  def env: F[Option[A]]
 
-  def fallback[F[_]: Sync]: F[Option[A]] =
-    Sync[F].pure(None)
+  def fallback: F[Option[A]]
 
-  def parse[F[_]: Sync](value: String): F[A]
+  def prop: F[Option[A]]
 
-  final def prop[F[_]: Sync]: F[Option[A]] =
-    Sync[F]
-      .delay(Option(System.getProperty(propName)))
-      .flatMap(_.traverse(parse[F]))
-
-  final def read[F[_]: Sync]: F[Option[A]] =
-    prop
-      .flatMap(_.map(_.some.pure).getOrElse(env))
-      .flatMap(_.map(_.some.pure).getOrElse(fallback))
+  def read: F[Option[A]]
 }
 
 private[aws] object Setting {
+  sealed abstract class Standard[F[_]: Sync, A](
+    envName: String,
+    propName: String
+  ) extends Setting[F, A] {
+    final def env: F[Option[A]] =
+      Sync[F]
+        .delay(Option(System.getenv(envName)))
+        .flatMap(_.traverse(parse))
+
+    def fallback: F[Option[A]] =
+      Sync[F].pure(None)
+
+    def parse(value: String): F[A]
+
+    final def prop: F[Option[A]] =
+      Sync[F]
+        .delay(Option(System.getProperty(propName)))
+        .flatMap(_.traverse(parse))
+
+    final def read: F[Option[A]] =
+      prop
+        .flatMap(_.map(_.some.pure).getOrElse(env))
+        .flatMap(_.map(_.some.pure).getOrElse(fallback))
+  }
 
   /**
     * Describes a [[Setting]] with a default value, which
@@ -72,98 +81,146 @@ private[aws] object Setting {
     * value when neither the system property, environment
     * variable, or fallback value is available.
     */
-  sealed abstract class Default[A](
+  sealed abstract class Default[F[_]: Sync, A](
     envName: String,
     propName: String,
     default: A
-  ) extends Setting[A](envName, propName) {
-    final def readOrDefault[F[_]: Sync]: F[A] =
+  ) extends Standard[F, A](envName, propName) {
+    final def readOrDefault: F[A] =
       read.map(_.getOrElse(default))
   }
 
-  object AccessKeyId
-    extends Setting[Credentials.AccessKeyId](
+  def AccessKeyId[F[_]: Sync]: Setting[F, Credentials.AccessKeyId] =
+    new Setting.Standard[F, Credentials.AccessKeyId](
       envName = "AWS_ACCESS_KEY_ID",
       propName = "aws.accessKeyId"
     ) {
-    override def parse[F[_]: Sync](value: String): F[Credentials.AccessKeyId] =
-      Sync[F].pure(Credentials.AccessKeyId(value))
-  }
+      override def parse(value: String): F[Credentials.AccessKeyId] =
+        Credentials.AccessKeyId(value).pure
+    }
 
-  object ContainerAuthorizationToken
-    extends Setting[Header.Raw](
+  def ConfigFile[F[_]: Sync]: Setting[F, Path] =
+    new Setting.Standard[F, Path](
+      envName = "AWS_CONFIG_FILE",
+      propName = "aws.configFile",
+    ) {
+      override def fallback: F[Option[Path]] =
+        Sync[F].delay(Option(System.getProperty("user.home")).map(Paths.get(_, ".aws/config")))
+
+      override def parse(value: String): F[Path] =
+        Sync[F].delay(Paths.get(value))
+    }
+
+  def ContainerAuthorizationToken[F[_]: Sync]: Setting[F, Header.Raw] =
+    new Setting.Standard[F, Header.Raw](
       envName = "AWS_CONTAINER_AUTHORIZATION_TOKEN",
       propName = "aws.containerAuthorizationToken"
     ) {
-    override def parse[F[_]: Sync](value: String): F[Header.Raw] =
-      Sync[F].pure(Header.Raw(ci"Authorization", value))
-  }
+      override def parse(value: String): F[Header.Raw] =
+        Header.Raw(ci"Authorization", value).pure
+    }
 
-  object ContainerCredentialsRelativeUri
-    extends Setting[String](
+  def ContainerCredentialsRelativeUri[F[_]: Sync]: Setting[F, String] =
+    new Setting.Standard[F, String](
       envName = "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI",
       propName = "aws.containerCredentialsPath",
     ) {
-    override def parse[F[_]: Sync](value: String): F[String] =
-      Sync[F].pure(value)
-  }
+      override def parse(value: String): F[String] =
+        value.pure
+    }
 
-  object ContainerCredentialsFullUri
-    extends Setting[Uri](
+  def ContainerCredentialsFullUri[F[_]: Sync]: Setting[F, Uri] =
+    new Setting.Standard[F, Uri](
       envName = "AWS_CONTAINER_CREDENTIALS_FULL_URI",
       propName = "aws.containerCredentialsFullUri"
     ) {
-    override def parse[F[_]: Sync](value: String): F[Uri] =
-      Uri.fromString(value).liftTo[F]
-  }
+      override def parse(value: String): F[Uri] =
+        Uri.fromString(value).liftTo[F]
+    }
 
-  object ContainerServiceEndpoint
-    extends Setting.Default[String](
+  def ContainerServiceEndpoint[F[_]: Sync]: Setting.Default[F, String] =
+    new Setting.Default[F, String](
       envName = "AWS_CONTAINER_SERVICE_ENDPOINT",
       propName = "aws.containerServiceEndpoint",
       default = "http://169.254.170.2"
     ) {
-    override def parse[F[_]: Sync](value: String): F[String] =
-      Sync[F].pure(value)
-  }
+      override def parse(value: String): F[String] =
+        value.pure
+    }
 
-  object Profile
-    extends Setting.Default[AwsProfileName](
+  def DefaultRegion[F[_]: Sync]: Setting[F, com.magine.aws.Region] =
+    new Setting.Standard[F, Region](
+      envName = "AWS_DEFAULT_REGION",
+      propName = "aws.defaultRegion"
+    ) {
+      override def parse(value: String): F[com.magine.aws.Region] =
+        com.magine.aws.Region.valid(value).liftTo[F]
+    }
+
+  def Profile[F[_]: Sync]: Setting.Default[F, AwsProfileName] =
+    new Setting.Default[F, AwsProfileName](
       envName = "AWS_PROFILE",
       propName = "aws.profile",
       default = AwsProfileName.default
     ) {
-    override def parse[F[_]: Sync](value: String): F[AwsProfileName] =
-      Sync[F].pure(AwsProfileName(value))
-  }
+      override def parse(value: String): F[AwsProfileName] =
+        AwsProfileName(value).pure
+    }
 
-  object SecretAccessKey
-    extends Setting[Credentials.SecretAccessKey](
+  def Region[F[_]: Sync]: Setting[F, com.magine.aws.Region] =
+    new Setting.Standard[F, Region](
+      envName = "AWS_REGION",
+      propName = "aws.region"
+    ) {
+      override def parse(value: String): F[com.magine.aws.Region] =
+        com.magine.aws.Region.valid(value).liftTo[F]
+    }
+
+  def RoleArn[F[_]: Sync]: Setting[F, AwsProfile.RoleArn] =
+    new Setting.Standard[F, AwsProfile.RoleArn](
+      envName = "AWS_ROLE_ARN",
+      propName = "aws.roleArn"
+    ) {
+      override def parse(value: String): F[AwsProfile.RoleArn] =
+        AwsProfile.RoleArn(value).pure
+    }
+
+  def RoleSessionName[F[_]: Sync]: Setting[F, AwsProfile.RoleSessionName] =
+    new Setting.Standard[F, AwsProfile.RoleSessionName](
+      envName = "AWS_ROLE_SESSION_NAME",
+      propName = "aws.roleSessionName"
+    ) {
+      override def parse(value: String): F[AwsProfile.RoleSessionName] =
+        AwsProfile.RoleSessionName(value).pure
+    }
+
+  def SecretAccessKey[F[_]: Sync]: Setting[F, Credentials.SecretAccessKey] =
+    new Setting.Standard[F, Credentials.SecretAccessKey](
       envName = "AWS_SECRET_ACCESS_KEY",
       propName = "aws.secretAccessKey"
     ) {
-    override def parse[F[_]: Sync](value: String): F[Credentials.SecretAccessKey] =
-      Sync[F].pure(Credentials.SecretAccessKey(value))
-  }
+      override def parse(value: String): F[Credentials.SecretAccessKey] =
+        Credentials.SecretAccessKey(value).pure
+    }
 
-  object SessionToken
-    extends Setting[Credentials.SessionToken](
+  def SessionToken[F[_]: Sync]: Setting[F, Credentials.SessionToken] =
+    new Setting.Standard[F, Credentials.SessionToken](
       envName = "AWS_SESSION_TOKEN",
       propName = "aws.sessionToken"
     ) {
-    override def parse[F[_]: Sync](value: String): F[Credentials.SessionToken] =
-      Sync[F].pure(Credentials.SessionToken(value))
-  }
+      override def parse(value: String): F[Credentials.SessionToken] =
+        Credentials.SessionToken(value).pure
+    }
 
-  object SharedCredentialsFile
-    extends Setting[Path](
+  def SharedCredentialsFile[F[_]: Sync]: Setting[F, Path] =
+    new Setting.Standard[F, Path](
       envName = "AWS_SHARED_CREDENTIALS_FILE",
       propName = "aws.sharedCredentialsFile",
     ) {
-    override def fallback[F[_]: Sync]: F[Option[Path]] =
-      Sync[F].delay(Option(System.getProperty("user.home")).map(Paths.get(_, ".aws/credentials")))
+      override def fallback: F[Option[Path]] =
+        Sync[F].delay(Option(System.getProperty("user.home")).map(Paths.get(_, ".aws/credentials")))
 
-    override def parse[F[_]: Sync](value: String): F[Path] =
-      Sync[F].delay(Paths.get(value))
-  }
+      override def parse(value: String): F[Path] =
+        Sync[F].delay(Paths.get(value))
+    }
 }
