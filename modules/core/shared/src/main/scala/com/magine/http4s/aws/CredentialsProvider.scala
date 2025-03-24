@@ -421,63 +421,62 @@ object CredentialsProvider {
     case class Cached(assumedRole: Option[AwsAssumedRole]) extends State
     case class Renewing(deferred: Deferred[F, Result]) extends State
 
-    for {
-      assumedRole <- credentialsCache.read(profile)
-      ref <- Ref.of[F, State](Cached(assumedRole))
-    } yield new CredentialsProvider[F] {
-      sealed trait Action {
-        def run(poll: Poll[F]): F[Credentials]
-      }
-
-      case class Renew(deferred: Deferred[F, Result]) extends Action {
-        private def complete(outcome: Outcome[F, Throwable, AwsAssumedRole]): F[Unit] =
-          for {
-            result <- outcome.embedError.attempt
-            _ <- deferred.complete(result)
-            _ <- ref.update(_ => Cached(result.toOption))
-          } yield ()
-
-        private def assumeRole: F[AwsAssumedRole] =
-          for {
-            tokenCode <- tokenCodeProvider.tokenCode(profile.mfaSerial)
-            assumedRole <- sts.assumeRole(
-              roleArn = profile.roleArn,
-              roleSessionName = profile.roleSessionName,
-              durationSeconds = profile.durationSeconds,
-              mfaSerial = profile.mfaSerial,
-              tokenCode = tokenCode
-            )
-            _ <- credentialsCache.write(assumedRole)
-          } yield assumedRole
-
-        override def run(poll: Poll[F]): F[Credentials] =
-          poll(assumeRole).guaranteeCase(complete).map(_.credentials)
-      }
-
-      case class Return(credentials: Credentials) extends Action {
-        override def run(poll: Poll[F]): F[Credentials] =
-          poll(credentials.pure)
-      }
-
-      case class Wait(deferred: Deferred[F, Result]) extends Action {
-        override def run(poll: Poll[F]): F[Credentials] =
-          poll(deferred.get.rethrow.map(_.credentials))
-      }
-
-      def action: F[Action] =
-        Deferred[F, Result].flatMap { deferred =>
-          F.realTimeInstant.flatMap { now =>
-            ref.modify {
-              case cached @ Cached(Some(assumedRole)) if assumedRole.isFresh(now) =>
-                (cached, Return(assumedRole.credentials))
-              case Cached(_) => (Renewing(deferred), Renew(deferred))
-              case renewing @ Renewing(deferred) => (renewing, Wait(deferred))
-            }
-          }
+    credentialsCache.read(profile).map(Cached(_)).flatMap(Ref[F].of[State](_)).map { ref =>
+      new CredentialsProvider[F] {
+        sealed trait Action {
+          def run(poll: Poll[F]): F[Credentials]
         }
 
-      override def credentials: F[Credentials] =
-        F.uncancelable(poll => action.flatMap(_.run(poll)))
+        case class Renew(deferred: Deferred[F, Result]) extends Action {
+          private def complete(outcome: Outcome[F, Throwable, AwsAssumedRole]): F[Unit] =
+            for {
+              result <- outcome.embedError.attempt
+              _ <- deferred.complete(result)
+              _ <- ref.update(_ => Cached(result.toOption))
+            } yield ()
+
+          private def assumeRole: F[AwsAssumedRole] =
+            for {
+              tokenCode <- tokenCodeProvider.tokenCode(profile.mfaSerial)
+              assumedRole <- sts.assumeRole(
+                roleArn = profile.roleArn,
+                roleSessionName = profile.roleSessionName,
+                durationSeconds = profile.durationSeconds,
+                mfaSerial = profile.mfaSerial,
+                tokenCode = tokenCode
+              )
+              _ <- credentialsCache.write(assumedRole)
+            } yield assumedRole
+
+          override def run(poll: Poll[F]): F[Credentials] =
+            poll(assumeRole).guaranteeCase(complete).map(_.credentials)
+        }
+
+        case class Return(credentials: Credentials) extends Action {
+          override def run(poll: Poll[F]): F[Credentials] =
+            poll(credentials.pure)
+        }
+
+        case class Wait(deferred: Deferred[F, Result]) extends Action {
+          override def run(poll: Poll[F]): F[Credentials] =
+            poll(deferred.get.rethrow.map(_.credentials))
+        }
+
+        def action: F[Action] =
+          Deferred[F, Result].flatMap { deferred =>
+            F.realTimeInstant.flatMap { now =>
+              ref.modify {
+                case cached @ Cached(Some(assumedRole)) if assumedRole.isFresh(now) =>
+                  (cached, Return(assumedRole.credentials))
+                case Cached(_) => (Renewing(deferred), Renew(deferred))
+                case renewing @ Renewing(deferred) => (renewing, Wait(deferred))
+              }
+            }
+          }
+
+        override def credentials: F[Credentials] =
+          F.uncancelable(poll => action.flatMap(_.run(poll)))
+      }
     }
   }
 
