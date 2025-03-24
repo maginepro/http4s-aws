@@ -11,8 +11,7 @@ You can add the following line to `build.sbt` to use the library.
 libraryDependencies += "com.magine" %% "http4s-aws" % http4sAwsVersion
 ```
 
-Make sure to replace `http4sAwsVersion` with a [release version](https://github.com/maginepro/http4s-aws/releases).<br>
-Replace `%%` with `%%%` if you are using [Scala.js](https://www.scala-js.org) or [Scala Native](https://scala-native.org).
+Make sure to replace `http4sAwsVersion` with a [release version](https://github.com/maginepro/http4s-aws/releases).
 
 ## Quick Example
 
