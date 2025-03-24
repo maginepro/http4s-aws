@@ -58,8 +58,9 @@ import scala.concurrent.duration.*
   *   variables read by [[CredentialsProvider.environmentVariables]].
   * - When running command-line applications, one typically requests
   *   temporary security credentials from the Security Token Service
-  *   (STS) using the credentials in `~/.aws/credentials`, which can
-  *   be read by `CredentialsProvider.credentialsFile`.
+  *   (STS) using `CredentialsProvider.securityTokenService`.
+  * - When using long-term credentials stored in `~/.aws/credentials`,
+  *   one can use `CredentialsProvider.credentialsFile` to read those.
   * - When running a service in Elastic Container Service (ECS) or on
   *   Fargate, credentials are provided by a container endpoint, which
   *   can be read by [[CredentialsProvider.containerEndpoint]].
@@ -374,9 +375,11 @@ object CredentialsProvider {
     * or if they have expired, the provider will prompt the user for a
     * [[TokenCode]] from the `mfa_serial` and use it to request and
     * cache new temporary credentials from STS. This happens the first
-    * time credentials are requested. The provider ensures there will
-    * only be at most one [[TokenCode]] request at the same time,
-    * despite possibly multiple simultaneous credential requests.
+    * time credentials are requested. Cached credentials are considered
+    * expired when there is 1 minute or less left until the expiration
+    * time. The provider ensures there will be at most one [[TokenCode]]
+    * request at the same time, despite possibly multiple simultaneous
+    * credential requests.
     *
     * The provider can read credentials cached by the AWS CLI, and the
     * other way around. However, the provider will only read the cache
