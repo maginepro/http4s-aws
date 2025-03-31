@@ -22,6 +22,7 @@ inThisBuild(
       tlGitHubDev("vlovgr", "Viktor Rudebeck")
     ),
     githubWorkflowJavaVersions := Seq(JavaSpec.temurin("17")),
+    githubWorkflowTargetBranches := Seq("**"),
     licenses := Seq(License.Apache2),
     mimaBinaryIssueFilters += ProblemFilters.exclude[Problem]("com.magine.http4s.aws.internal.*"),
     organization := "com.magine",
