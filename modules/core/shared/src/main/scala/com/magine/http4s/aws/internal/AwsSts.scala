@@ -21,7 +21,7 @@ import cats.effect.Concurrent
 import cats.effect.syntax.all.*
 import cats.syntax.all.*
 import com.magine.aws.Region
-import com.magine.http4s.aws.AwsServiceName
+import com.magine.http4s.aws.AwsServiceName.SecurityTokenService
 import com.magine.http4s.aws.AwsSigningClient
 import com.magine.http4s.aws.CredentialsProvider
 import com.magine.http4s.aws.MfaSerial
@@ -57,15 +57,14 @@ private[aws] trait AwsSts[F[_]] {
 }
 
 private[aws] object AwsSts {
-  def fromClient[F[_]: Async: Hashing](
+  def fromClient[F[_]: Async](
     client: Client[F],
     provider: CredentialsProvider[F],
     region: Region
-  ): AwsSts[F] =
-    fromSigningClient(
-      AwsSigningClient(provider, region, AwsServiceName.SecurityTokenService)(client),
-      region
-    )
+  ): AwsSts[F] = {
+    implicit val hashing: Hashing[F] = Hashing.forSync
+    fromSigningClient(AwsSigningClient(provider, region, SecurityTokenService)(client), region)
+  }
 
   def fromSigningClient[F[_]: Async](client: Client[F], region: Region): AwsSts[F] =
     new AwsSts[F] {

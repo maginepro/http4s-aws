@@ -24,14 +24,22 @@ inThisBuild(
     githubWorkflowJavaVersions := Seq(JavaSpec.temurin("17")),
     githubWorkflowTargetBranches := Seq("**"),
     licenses := Seq(License.Apache2),
-    mimaBinaryIssueFilters += ProblemFilters.exclude[Problem]("com.magine.http4s.aws.internal.*"),
+    mimaBinaryIssueFilters ++= Seq(
+      ProblemFilters.exclude[Problem]("com.magine.http4s.aws.internal.*"),
+      ProblemFilters.exclude[DirectMissingMethodProblem](
+        "com.magine.http4s.aws.CredentialsProvider.securityTokenService"
+      ),
+      ProblemFilters.exclude[IncompatibleMethTypeProblem](
+        "com.magine.http4s.aws.CredentialsProvider.securityTokenService"
+      )
+    ),
     organization := "com.magine",
     organizationName := "Magine Pro",
     scalaVersion := scala3Version,
     semanticdbEnabled := true,
     semanticdbVersion := scalafixSemanticdb.revision,
     startYear := Some(2025),
-    tlBaseVersion := "6.1",
+    tlBaseVersion := "6.2",
     tlCiHeaderCheck := true,
     tlCiScalafixCheck := true,
     tlCiScalafmtCheck := true,
