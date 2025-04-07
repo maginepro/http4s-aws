@@ -1,7 +1,7 @@
 import com.typesafe.tools.mima.core._
 
 val awsRegionsVersion = "1.0.1"
-val caseInsensitiveVersion = "1.4.2"
+val caseInsensitiveVersion = "1.5.0"
 val catsEffectVersion = "3.6.0"
 val catsParseVersion = "1.1.0"
 val catsVersion = "2.13.0"
