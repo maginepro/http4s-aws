@@ -47,6 +47,7 @@ import org.http4s.Method
 import org.http4s.Request
 import org.http4s.Uri
 import org.http4s.client.Client
+import scala.annotation.nowarn
 import scala.concurrent.duration.*
 
 /**
@@ -332,10 +333,37 @@ object CredentialsProvider {
         } yield Credentials(accessKeyId, secretAccessKey, sessionToken)
     }
 
-  def securityTokenService[F[_]: Async: Hashing](
+  def securityTokenService[F[_]: Async](
     client: Client[F]
   ): F[CredentialsProvider[F]] =
-    Profile.readOrDefault.flatMap(securityTokenService(client, _))
+    for {
+      profileName <- Profile.readOrDefault
+      profile <- AwsConfig.default.read(profileName).flatMap(_.resolve)
+      provider <- CredentialsProvider.credentialsFile(profile.sourceProfile)
+      securityTokenService <- securityTokenService(
+        profile = profile,
+        tokenCodeProvider = TokenCodeProvider.default[F],
+        credentialsCache = AwsCredentialsCache.default[F],
+        sts = AwsSts.fromClient(client, provider, profile.region)
+      )
+    } yield securityTokenService
+
+  /* TODO: Remove for 7.0 release. */
+  @nowarn("msg=used")
+  private[aws] def securityTokenService[F[_]: Async: Hashing](
+    client: Client[F]
+  ): F[CredentialsProvider[F]] =
+    for {
+      profileName <- Profile.readOrDefault
+      profile <- AwsConfig.default.read(profileName).flatMap(_.resolve)
+      provider <- CredentialsProvider.credentialsFile(profile.sourceProfile)
+      securityTokenService <- securityTokenService(
+        profile = profile,
+        tokenCodeProvider = TokenCodeProvider.default[F],
+        credentialsCache = AwsCredentialsCache.default[F],
+        sts = AwsSts.fromClient(client, provider, profile.region)
+      )
+    } yield securityTokenService
 
   /**
     * Returns a new [[CredentialsProvider]] which requests temporary
@@ -388,13 +416,57 @@ object CredentialsProvider {
     * the `~/.aws/credentials` file is read and cached the first time
     * temporary credentials are requested from STS.
     */
-  def securityTokenService[F[_]: Async: Hashing](
+  def securityTokenService[F[_]: Async](
     client: Client[F],
     profileName: AwsProfileName
   ): F[CredentialsProvider[F]] =
-    securityTokenService(client, profileName, TokenCodeProvider.default)
+    for {
+      profile <- AwsConfig.default.read(profileName).flatMap(_.resolve)
+      provider <- CredentialsProvider.credentialsFile(profile.sourceProfile)
+      securityTokenService <- securityTokenService(
+        profile = profile,
+        tokenCodeProvider = TokenCodeProvider.default[F],
+        credentialsCache = AwsCredentialsCache.default[F],
+        sts = AwsSts.fromClient(client, provider, profile.region)
+      )
+    } yield securityTokenService
 
-  def securityTokenService[F[_]: Async: Hashing](
+  /* TODO: Remove for 7.0 release. */
+  @nowarn("msg=used")
+  private[aws] def securityTokenService[F[_]: Async: Hashing](
+    client: Client[F],
+    profileName: AwsProfileName
+  ): F[CredentialsProvider[F]] =
+    for {
+      profile <- AwsConfig.default.read(profileName).flatMap(_.resolve)
+      provider <- CredentialsProvider.credentialsFile(profile.sourceProfile)
+      securityTokenService <- securityTokenService(
+        profile = profile,
+        tokenCodeProvider = TokenCodeProvider.default[F],
+        credentialsCache = AwsCredentialsCache.default[F],
+        sts = AwsSts.fromClient(client, provider, profile.region)
+      )
+    } yield securityTokenService
+
+  def securityTokenService[F[_]: Async](
+    client: Client[F],
+    profileName: AwsProfileName,
+    tokenCodeProvider: TokenCodeProvider[F]
+  ): F[CredentialsProvider[F]] =
+    for {
+      profile <- AwsConfig.default.read(profileName).flatMap(_.resolve)
+      provider <- CredentialsProvider.credentialsFile(profile.sourceProfile)
+      securityTokenService <- securityTokenService(
+        profile = profile,
+        tokenCodeProvider = tokenCodeProvider,
+        credentialsCache = AwsCredentialsCache.default[F],
+        sts = AwsSts.fromClient(client, provider, profile.region)
+      )
+    } yield securityTokenService
+
+  /* TODO: Remove for 7.0 release. */
+  @nowarn("msg=used")
+  private[aws] def securityTokenService[F[_]: Async: Hashing](
     client: Client[F],
     profileName: AwsProfileName,
     tokenCodeProvider: TokenCodeProvider[F]
