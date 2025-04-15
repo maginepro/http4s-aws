@@ -59,7 +59,8 @@ object `X-Amz-Date` {
       .leftMap(_ => ParseFailure("Invalid X-Amz-Date header", s))
 
   def put[F[_]: Temporal](request: Request[F]): F[Request[F]] =
-    Temporal[F].realTimeInstant
+    Temporal[F].realTime
+      .map(d => Instant.EPOCH.plusNanos(d.toNanos))
       .map(`X-Amz-Date`(_))
       .map(request.putHeaders(_))
 

@@ -24,6 +24,7 @@ import cats.syntax.all.*
 import com.magine.aws.Region
 import com.magine.http4s.aws.AwsProfileName
 import com.magine.http4s.aws.MfaSerial
+import java.time.Instant
 
 /**
   * Represents a profile in the `~/.aws/config` file.
@@ -50,9 +51,10 @@ private[aws] object AwsProfile {
     def default[F[_]](
       implicit F: Clock[F]
     ): F[RoleSessionName] =
-      F.applicative.map(F.realTimeInstant)(now =>
+      F.applicative.map(F.realTime) { realTime =>
+        val now = Instant.EPOCH.plusNanos(realTime.toNanos)
         RoleSessionName(s"http4s-aws-session-${now.getEpochSecond}")
-      )
+      }
   }
 
   final case class DurationSeconds(value: Int)
