@@ -125,9 +125,9 @@ object AwsPresigning {
     RequestDateTime.fromRequestQueryParam(request).map { requestDateTime =>
       val canonicalRequest = CanonicalRequest.fromRequestUnsignedPayload(request, serviceName)
       val credentialScope = CredentialScope(region, requestDateTime.date, serviceName)
-      val signingContent = Signature.signingContent(canonicalRequest, credentialScope, requestDateTime)
-      val signingKey = Signature.signingKey(region, requestDateTime.date, secretAccessKey, serviceName)
-      val signature = Signature.sign(signingKey, signingContent).value
+      val signingContent = Signature.Legacy.signingContent(canonicalRequest, credentialScope, requestDateTime)
+      val signingKey = Signature.Legacy.signingKey(region, requestDateTime.date, secretAccessKey, serviceName)
+      val signature = Signature.Legacy.sign(signingKey, signingContent).value
       `X-Amz-Signature`.putQueryParam(signature)(request)
     }
 }

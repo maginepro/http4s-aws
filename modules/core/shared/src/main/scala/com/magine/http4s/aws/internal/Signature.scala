@@ -28,38 +28,41 @@ import scala.util.chaining.*
 private[aws] final case class Signature(value: String)
 
 private[aws] object Signature {
-  private val algorithm: String = "HmacSHA256"
 
-  def sign(key: SecretKeySpec, bytes: Array[Byte]): Signature =
-    Signature(Hex.encodeHex(signWithKey(key, bytes)))
+  object Legacy {
+    private val algorithm: String = "HmacSHA256"
 
-  def signingContent(
-    canonicalRequest: CanonicalRequest,
-    credentialScope: CredentialScope,
-    requestDateTime: RequestDateTime
-  ): Array[Byte] =
-    show"AWS4-HMAC-SHA256\n${requestDateTime.value}\n${credentialScope.value}\n${canonicalRequest.valueHash}"
-      .getBytes(UTF_8)
+    def sign(key: SecretKeySpec, bytes: Array[Byte]): Signature =
+      Signature(Hex.encodeHex(signWithKey(key, bytes)))
 
-  def signingKey(
-    region: Region,
-    requestDate: RequestDate,
-    secretAccessKey: Credentials.SecretAccessKey,
-    serviceName: AwsServiceName
-  ): SecretKeySpec = {
-    def sign(bytes: Array[Byte])(key: SecretKeySpec): SecretKeySpec =
-      new SecretKeySpec(Signature.signWithKey(key, bytes), algorithm)
+    def signingContent(
+      canonicalRequest: CanonicalRequest,
+      credentialScope: CredentialScope,
+      requestDateTime: RequestDateTime
+    ): Array[Byte] =
+      show"AWS4-HMAC-SHA256\n${requestDateTime.value}\n${credentialScope.value}\n${canonicalRequest.valueHash}"
+        .getBytes(UTF_8)
 
-    new SecretKeySpec(s"AWS4${secretAccessKey.value}".getBytes(UTF_8), algorithm)
-      .pipe(sign(requestDate.value.getBytes(UTF_8)))
-      .pipe(sign(region.id.getBytes(UTF_8)))
-      .pipe(sign(serviceName.value.getBytes(UTF_8)))
-      .pipe(sign("aws4_request".getBytes(UTF_8)))
-  }
+    def signingKey(
+      region: Region,
+      requestDate: RequestDate,
+      secretAccessKey: Credentials.SecretAccessKey,
+      serviceName: AwsServiceName
+    ): SecretKeySpec = {
+      def sign(bytes: Array[Byte])(key: SecretKeySpec): SecretKeySpec =
+        new SecretKeySpec(signWithKey(key, bytes), algorithm)
 
-  private def signWithKey(key: SecretKeySpec, bytes: Array[Byte]): Array[Byte] = {
-    val mac = Mac.getInstance(algorithm)
-    mac.init(key)
-    mac.doFinal(bytes)
+      new SecretKeySpec(s"AWS4${secretAccessKey.value}".getBytes(UTF_8), algorithm)
+        .pipe(sign(requestDate.value.getBytes(UTF_8)))
+        .pipe(sign(region.id.getBytes(UTF_8)))
+        .pipe(sign(serviceName.value.getBytes(UTF_8)))
+        .pipe(sign("aws4_request".getBytes(UTF_8)))
+    }
+
+    private def signWithKey(key: SecretKeySpec, bytes: Array[Byte]): Array[Byte] = {
+      val mac = Mac.getInstance(algorithm)
+      mac.init(key)
+      mac.doFinal(bytes)
+    }
   }
 }

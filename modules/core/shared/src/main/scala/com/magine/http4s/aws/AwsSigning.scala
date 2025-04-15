@@ -112,9 +112,9 @@ object AwsSigning {
       RequestDateTime.fromRequest(request)
     ).mapN { (canonicalRequest, requestDateTime) =>
       val credentialScope = CredentialScope(region, requestDateTime.date, serviceName)
-      val signingContent = Signature.signingContent(canonicalRequest, credentialScope, requestDateTime)
-      val signingKey = Signature.signingKey(region, requestDateTime.date, secretAccessKey, serviceName)
-      val signature = Signature.sign(signingKey, signingContent)
+      val signingContent = Signature.Legacy.signingContent(canonicalRequest, credentialScope, requestDateTime)
+      val signingKey = Signature.Legacy.signingKey(region, requestDateTime.date, secretAccessKey, serviceName)
+      val signature = Signature.Legacy.sign(signingKey, signingContent)
       Authorization.putIfAbsent(request, accessKeyId, canonicalRequest, credentialScope, signature)
     }
 }
