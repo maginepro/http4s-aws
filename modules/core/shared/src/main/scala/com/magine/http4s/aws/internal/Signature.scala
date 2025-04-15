@@ -16,10 +16,15 @@
 
 package com.magine.http4s.aws.internal
 
+import cats.effect.MonadCancelThrow
 import cats.syntax.all.*
 import com.magine.aws.Region
 import com.magine.http4s.aws.AwsServiceName
 import com.magine.http4s.aws.Credentials
+import fs2.Chunk
+import fs2.hashing.Hash
+import fs2.hashing.HashAlgorithm
+import fs2.hashing.Hashing
 import java.nio.charset.StandardCharsets.UTF_8
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
@@ -28,6 +33,47 @@ import scala.util.chaining.*
 private[aws] final case class Signature(value: String)
 
 private[aws] object Signature {
+  def sign[F[_]: MonadCancelThrow: Hashing](key: Chunk[Byte], bytes: Chunk[Byte]): F[Signature] =
+    signWithKey(key, bytes).map(hash => Signature(Hex.encodeHex(hash.bytes.toArray)))
+
+  def signingContent(
+    canonicalRequest: CanonicalRequest,
+    credentialScope: CredentialScope,
+    requestDateTime: RequestDateTime
+  ): Chunk[Byte] =
+    Chunk.array(
+      show"AWS4-HMAC-SHA256\n${requestDateTime.value}\n${credentialScope.value}\n${canonicalRequest.valueHash}"
+        .getBytes(UTF_8)
+    )
+
+  def signingKey[F[_]: MonadCancelThrow: Hashing](
+    region: Region,
+    requestDate: RequestDate,
+    secretAccessKey: Credentials.SecretAccessKey,
+    serviceName: AwsServiceName
+  ): F[Chunk[Byte]] = {
+    def sign(bytes: Chunk[Byte])(key: Chunk[Byte]): F[Chunk[Byte]] =
+      signWithKey(key, bytes).map(_.bytes)
+
+    val initialKey = Chunk.array(s"AWS4${secretAccessKey.value}".getBytes(UTF_8))
+    val initialBytes = Chunk.array(requestDate.value.getBytes(UTF_8))
+
+    sign(initialBytes)(initialKey)
+      .flatMap(sign(Chunk.array(region.id.getBytes(UTF_8))))
+      .flatMap(sign(Chunk.array(serviceName.value.getBytes(UTF_8))))
+      .flatMap(sign(Chunk.array("aws4_request".getBytes(UTF_8))))
+  }
+
+  private def signWithKey[F[_]: MonadCancelThrow: Hashing](
+    key: Chunk[Byte],
+    bytes: Chunk[Byte]
+  ): F[Hash] =
+    Hashing[F].hmac(HashAlgorithm.SHA256, key).use { hasher =>
+      for {
+        _ <- hasher.update(bytes)
+        hash <- hasher.hash
+      } yield hash
+    }
 
   object Legacy {
     private val algorithm: String = "HmacSHA256"
