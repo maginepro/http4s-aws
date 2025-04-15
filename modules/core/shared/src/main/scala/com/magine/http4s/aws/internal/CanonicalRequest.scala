@@ -17,11 +17,15 @@
 package com.magine.http4s.aws.internal
 
 import cats.ApplicativeThrow
+import cats.effect.MonadCancelThrow
 import cats.syntax.all.*
 import com.magine.http4s.aws.AwsServiceName
 import com.magine.http4s.aws.AwsUrlEncoding.urlEncode
 import com.magine.http4s.aws.AwsUrlEncoding.urlEncodePath
 import com.magine.http4s.aws.headers.`X-Amz-Content-SHA256`
+import fs2.Chunk
+import fs2.hashing.HashAlgorithm
+import fs2.hashing.Hashing
 import java.nio.charset.StandardCharsets.UTF_8
 import java.security.MessageDigest
 import org.http4s.Header
@@ -42,7 +46,16 @@ private[aws] final case class CanonicalRequest(
   def value: String =
     show"$httpMethod\n$canonicalUri\n$canonicalQueryString\n$canonicalHeaders\n$signedHeaders\n$hashedPayload"
 
-  def valueHash: String = {
+  def valueHash[F[_]: Hashing: MonadCancelThrow]: F[String] =
+    Hashing[F].hasher(HashAlgorithm.SHA256).use { hasher =>
+      for {
+        _ <- hasher.update(Chunk.array(value.getBytes(UTF_8)))
+        hash <- hasher.hash.map(_.bytes.toArray)
+      } yield Hex.encodeHex(hash)
+    }
+
+  /* TODO: Remove for 7.0 release. */
+  def valueHashLegacy: String = {
     val digest = MessageDigest.getInstance("SHA-256")
     Hex.encodeHex(digest.digest(value.getBytes(UTF_8)))
   }

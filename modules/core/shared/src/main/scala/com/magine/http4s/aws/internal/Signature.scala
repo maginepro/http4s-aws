@@ -36,15 +36,17 @@ private[aws] object Signature {
   def sign[F[_]: Hashing: MonadCancelThrow](key: Chunk[Byte], bytes: Chunk[Byte]): F[Signature] =
     signWithKey(key, bytes).map(hash => Signature(Hex.encodeHex(hash.bytes.toArray)))
 
-  def signingContent(
+  def signingContent[F[_]: Hashing: MonadCancelThrow](
     canonicalRequest: CanonicalRequest,
     credentialScope: CredentialScope,
     requestDateTime: RequestDateTime
-  ): Chunk[Byte] =
-    Chunk.array(
-      show"AWS4-HMAC-SHA256\n${requestDateTime.value}\n${credentialScope.value}\n${canonicalRequest.valueHash}"
-        .getBytes(UTF_8)
-    )
+  ): F[Chunk[Byte]] =
+    canonicalRequest.valueHash.map { canonicalRequestHash =>
+      Chunk.array(
+        show"AWS4-HMAC-SHA256\n${requestDateTime.value}\n${credentialScope.value}\n$canonicalRequestHash"
+          .getBytes(UTF_8)
+      )
+    }
 
   def signingKey[F[_]: Hashing: MonadCancelThrow](
     region: Region,
@@ -75,6 +77,7 @@ private[aws] object Signature {
       } yield hash
     }
 
+  /* TODO: Remove for 7.0 release. */
   object Legacy {
     val algorithm: String = "HmacSHA256"
 
@@ -86,7 +89,7 @@ private[aws] object Signature {
       credentialScope: CredentialScope,
       requestDateTime: RequestDateTime
     ): Array[Byte] =
-      show"AWS4-HMAC-SHA256\n${requestDateTime.value}\n${credentialScope.value}\n${canonicalRequest.valueHash}"
+      show"AWS4-HMAC-SHA256\n${requestDateTime.value}\n${credentialScope.value}\n${canonicalRequest.valueHashLegacy}"
         .getBytes(UTF_8)
 
     def signingKey(
