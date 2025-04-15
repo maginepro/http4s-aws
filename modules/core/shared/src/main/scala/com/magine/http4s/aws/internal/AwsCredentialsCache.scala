@@ -20,6 +20,9 @@ import cats.effect.Ref
 import cats.effect.Sync
 import cats.syntax.all.*
 import com.magine.http4s.aws.MfaSerial
+import fs2.Chunk
+import fs2.hashing.HashAlgorithm
+import fs2.hashing.Hashing
 import io.circe.Decoder
 import io.circe.Json
 import io.circe.JsonObject
@@ -31,7 +34,6 @@ import java.nio.file.Files
 import java.nio.file.NoSuchFileException
 import java.nio.file.Path
 import java.nio.file.Paths
-import java.security.MessageDigest
 
 /**
   * Capability to read and write credentials in `~/.aws/cli/cache`.
@@ -129,39 +131,31 @@ private[aws] object AwsCredentialsCache {
       roleSessionName: AwsProfile.RoleSessionName,
       durationSeconds: Option[AwsProfile.DurationSeconds],
       mfaSerial: MfaSerial
-    ): F[FileName] =
-      Sync[F].delay {
-        def sha1Hex(s: String): String =
-          MessageDigest
-            .getInstance("SHA-1")
-            .digest(s.getBytes(UTF_8))
-            .map("%02x".format(_))
-            .mkString
+    ): F[FileName] = {
+      val json =
+        JsonObject
+          .fromIterable(
+            List(
+              durationSeconds.map("DurationSeconds" -> _.value.asJson),
+              Some("RoleArn" -> roleArn.value.asJson),
+              Some("RoleSessionName" -> roleSessionName.value.asJson),
+              Some("SerialNumber" -> mfaSerial.value.asJson)
+            ).flatten
+          )
+          .toJson
 
-        val json =
-          JsonObject
-            .fromIterable(
-              List(
-                durationSeconds.map("DurationSeconds" -> _.value.asJson),
-                Some("RoleArn" -> roleArn.value.asJson),
-                Some("RoleSessionName" -> roleSessionName.value.asJson),
-                Some("SerialNumber" -> mfaSerial.value.asJson)
-              ).flatten
-            )
-            .toJson
-
-        val hash =
-          sha1Hex(
-            json.printWith(
-              Printer.noSpaces.copy(
-                colonRight = " ",
-                objectCommaRight = " "
-              )
+      val hash =
+        sha1Hex(
+          json.printWith(
+            Printer.noSpaces.copy(
+              colonRight = " ",
+              objectCommaRight = " "
             )
           )
+        )
 
-        new FileName(Paths.get(s"$hash.json")) {}
-      }
+      hash.map(hash => new FileName(Paths.get(s"$hash.json")) {})
+    }
 
     def fromProfile[F[_]: Sync](profile: AwsProfileResolved): F[FileName] =
       FileName(
@@ -170,5 +164,13 @@ private[aws] object AwsCredentialsCache {
         durationSeconds = profile.durationSeconds,
         mfaSerial = profile.mfaSerial
       )
+
+    private def sha1Hex[F[_]: Sync](s: String): F[String] =
+      Hashing.forSync[F].hasher(HashAlgorithm.SHA1).use { hasher =>
+        for {
+          _ <- hasher.update(Chunk.array(s.getBytes(UTF_8)))
+          hash <- hasher.hash.map(_.bytes.toArray)
+        } yield Hex.encodeHex(hash)
+      }
   }
 }

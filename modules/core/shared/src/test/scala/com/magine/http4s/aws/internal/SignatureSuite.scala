@@ -18,16 +18,14 @@ package com.magine.http4s.aws.internal
 
 import cats.effect.IO
 import com.magine.aws.Region
-import com.magine.http4s.aws.AwsServiceName
-import com.magine.http4s.aws.Credentials
+import com.magine.http4s.aws.*
+import com.magine.http4s.aws.Credentials.SecretAccessKey
 import com.magine.http4s.aws.internal.Signature.Legacy.algorithm
 import fs2.Chunk
-import java.time.LocalDate
 import javax.crypto.spec.SecretKeySpec
 import munit.CatsEffectSuite
 import munit.ScalaCheckEffectSuite
 import org.scalacheck.Arbitrary.arbitrary
-import org.scalacheck.Gen
 import org.scalacheck.effect.PropF
 
 final class SignatureSuite extends CatsEffectSuite with ScalaCheckEffectSuite {
@@ -42,27 +40,40 @@ final class SignatureSuite extends CatsEffectSuite with ScalaCheckEffectSuite {
     PropF.forAllF(gen) { case (key, bytes) =>
       for {
         actual <- Signature.sign[IO](Chunk.array(key), Chunk.array(bytes))
-        expected = Signature.Legacy.sign(new SecretKeySpec(key, algorithm), bytes)
+        expected <- IO(Signature.Legacy.sign(new SecretKeySpec(key, algorithm), bytes))
         _ <- IO(assertEquals(actual, expected))
       } yield ()
     }
   }
 
   test("Signature.signingKey consistent with legacy") {
-    val gen =
-      for {
-        region <- Gen.oneOf(Gen.oneOf(Region.values), arbitrary[String].map(Region(_)))
-        requestDate <- arbitrary[LocalDate].map(RequestDate(_))
-        secretAccessKey <- arbitrary[String].map(Credentials.SecretAccessKey(_))
-        serviceName <- arbitrary[String].map(AwsServiceName(_))
-      } yield (region, requestDate, secretAccessKey, serviceName)
+    PropF.forAllF {
+      (
+        region: Region,
+        requestDate: RequestDate,
+        secretAccessKey: SecretAccessKey,
+        serviceName: AwsServiceName
+      ) =>
+        for {
+          actual <- Signature.signingKey[IO](region, requestDate, secretAccessKey, serviceName)
+          expected <- IO(Signature.Legacy.signingKey(region, requestDate, secretAccessKey, serviceName))
+          _ <- IO(assertEquals(actual, Chunk.array(expected.getEncoded)))
+        } yield ()
+    }
+  }
 
-    PropF.forAllF(gen) { case (region, requestDate, secretAccessKey, serviceName) =>
-      for {
-        actual <- Signature.signingKey[IO](region, requestDate, secretAccessKey, serviceName)
-        expected = Signature.Legacy.signingKey(region, requestDate, secretAccessKey, serviceName)
-        _ <- IO(assertEquals(actual, Chunk.array(expected.getEncoded)))
-      } yield ()
+  test("Signature.signingContent consistent with legacy") {
+    PropF.forAllF {
+      (
+        canonicalRequest: CanonicalRequest,
+        credentialScope: CredentialScope,
+        requestDateTime: RequestDateTime
+      ) =>
+        for {
+          actual <- Signature.signingContent[IO](canonicalRequest, credentialScope, requestDateTime)
+          expected <- IO(Signature.Legacy.signingContent(canonicalRequest, credentialScope, requestDateTime))
+          _ <- IO(assertEquals(actual, Chunk.array(expected)))
+        } yield ()
     }
   }
 }

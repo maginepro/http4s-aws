@@ -165,7 +165,7 @@ object AwsPresigning {
       requestDateTime <- RequestDateTime.fromRequestQueryParam(request)
       canonicalRequest = CanonicalRequest.fromRequestUnsignedPayload(request, serviceName)
       credentialScope = CredentialScope(region, requestDateTime.date, serviceName)
-      signingContent = Signature.signingContent(canonicalRequest, credentialScope, requestDateTime)
+      signingContent <- Signature.signingContent(canonicalRequest, credentialScope, requestDateTime)
       signingKey <- Signature.signingKey(region, requestDateTime.date, secretAccessKey, serviceName)
       signature <- Signature.sign(signingKey, signingContent).map(_.value)
     } yield `X-Amz-Signature`.putQueryParam(signature)(request)

@@ -122,7 +122,7 @@ object AwsSigning {
       canonicalRequest <- CanonicalRequest.fromRequest(request, serviceName)
       requestDateTime <- RequestDateTime.fromRequest(request)
       credentialScope = CredentialScope(region, requestDateTime.date, serviceName)
-      signingContent = Signature.signingContent(canonicalRequest, credentialScope, requestDateTime)
+      signingContent <- Signature.signingContent(canonicalRequest, credentialScope, requestDateTime)
       signingKey <- Signature.signingKey(region, requestDateTime.date, secretAccessKey, serviceName)
       signature <- Signature.sign(signingKey, signingContent)
     } yield Authorization.putIfAbsent(request, accessKeyId, canonicalRequest, credentialScope, signature)
