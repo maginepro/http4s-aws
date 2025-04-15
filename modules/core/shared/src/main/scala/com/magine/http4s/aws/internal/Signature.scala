@@ -76,7 +76,7 @@ private[aws] object Signature {
     }
 
   object Legacy {
-    private val algorithm: String = "HmacSHA256"
+    val algorithm: String = "HmacSHA256"
 
     def sign(key: SecretKeySpec, bytes: Array[Byte]): Signature =
       Signature(Hex.encodeHex(signWithKey(key, bytes)))
