@@ -140,7 +140,7 @@ package object aws {
   implicit val credentialsArbitrary: Arbitrary[Credentials] =
     Arbitrary(credentialsGen)
 
-  /* The effect here is to capture `MessageDigest` possibly being unavailable. */
+  /* The effect here is to capture `Hashing` possibly being unavailable. */
   def awsCredentialsCacheFileName(profile: AwsProfileResolved): AwsCredentialsCache.FileName =
     AwsCredentialsCache.FileName.fromProfile[SyncIO](profile).unsafeRunSync()
 
