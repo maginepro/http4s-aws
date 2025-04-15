@@ -57,7 +57,7 @@ private[aws] object AwsConfig {
           .readAll(path)
           .through(utf8.decode)
           .compile
-          .foldMonoid
+          .string
           .adaptError { case _: NoSuchFileException => MissingCredentials() }
           .flatMap(IniFile.parse(_).leftMap(failedToParse(path, _)).liftTo[F])
 

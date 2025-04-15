@@ -73,7 +73,7 @@ private[aws] object AwsCredentialsCache {
               .readAll(path)
               .through(utf8.decode)
               .compile
-              .foldMonoid
+              .string
               .flatMap(decode[AwsAssumedRole](_).map(_.some).liftTo[F])
               .recover { case _: NoSuchFileException => none }
           }
