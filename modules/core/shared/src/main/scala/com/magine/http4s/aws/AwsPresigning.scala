@@ -161,15 +161,14 @@ object AwsPresigning {
     region: Region,
     serviceName: AwsServiceName
   ): F[Request[F]] =
-    RequestDateTime.fromRequestQueryParam(request).flatMap { requestDateTime =>
-      val canonicalRequest = CanonicalRequest.fromRequestUnsignedPayload(request, serviceName)
-      val credentialScope = CredentialScope(region, requestDateTime.date, serviceName)
-      val signingContent = Signature.signingContent(canonicalRequest, credentialScope, requestDateTime)
-      for {
-        signingKey <- Signature.signingKey(region, requestDateTime.date, secretAccessKey, serviceName)
-        signature <- Signature.sign(signingKey, signingContent).map(_.value)
-      } yield `X-Amz-Signature`.putQueryParam(signature)(request)
-    }
+    for {
+      requestDateTime <- RequestDateTime.fromRequestQueryParam(request)
+      canonicalRequest = CanonicalRequest.fromRequestUnsignedPayload(request, serviceName)
+      credentialScope = CredentialScope(region, requestDateTime.date, serviceName)
+      signingContent = Signature.signingContent(canonicalRequest, credentialScope, requestDateTime)
+      signingKey <- Signature.signingKey(region, requestDateTime.date, secretAccessKey, serviceName)
+      signature <- Signature.sign(signingKey, signingContent).map(_.value)
+    } yield `X-Amz-Signature`.putQueryParam(signature)(request)
 
   /* TODO: Remove for 7.0 release. */
   private[aws] def presignRequest[F[_]: ApplicativeThrow](
