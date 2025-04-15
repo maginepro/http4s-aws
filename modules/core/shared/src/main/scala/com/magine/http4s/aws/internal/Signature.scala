@@ -33,7 +33,7 @@ import scala.util.chaining.*
 private[aws] final case class Signature(value: String)
 
 private[aws] object Signature {
-  def sign[F[_]: MonadCancelThrow: Hashing](key: Chunk[Byte], bytes: Chunk[Byte]): F[Signature] =
+  def sign[F[_]: Hashing: MonadCancelThrow](key: Chunk[Byte], bytes: Chunk[Byte]): F[Signature] =
     signWithKey(key, bytes).map(hash => Signature(Hex.encodeHex(hash.bytes.toArray)))
 
   def signingContent(
@@ -46,7 +46,7 @@ private[aws] object Signature {
         .getBytes(UTF_8)
     )
 
-  def signingKey[F[_]: MonadCancelThrow: Hashing](
+  def signingKey[F[_]: Hashing: MonadCancelThrow](
     region: Region,
     requestDate: RequestDate,
     secretAccessKey: Credentials.SecretAccessKey,
@@ -64,7 +64,7 @@ private[aws] object Signature {
       .flatMap(sign(Chunk.array("aws4_request".getBytes(UTF_8))))
   }
 
-  private def signWithKey[F[_]: MonadCancelThrow: Hashing](
+  private def signWithKey[F[_]: Hashing: MonadCancelThrow](
     key: Chunk[Byte],
     bytes: Chunk[Byte]
   ): F[Hash] =

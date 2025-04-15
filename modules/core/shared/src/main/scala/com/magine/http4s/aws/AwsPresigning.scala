@@ -46,7 +46,7 @@ object AwsPresigning {
     * The presigning will target the specified region and
     * service, and use the specified expiry time.
     */
-  def apply[F[_]: Temporal: Hashing](
+  def apply[F[_]: Hashing: Temporal](
     provider: CredentialsProvider[F],
     region: Region,
     serviceName: AwsServiceName,
@@ -146,7 +146,7 @@ object AwsPresigning {
     * The specified request should have required headers and
     * query parameters, as added by [[prepareRequest]].
     */
-  def presignRequest[F[_]: MonadCancelThrow: Hashing](
+  def presignRequest[F[_]: Hashing: MonadCancelThrow](
     request: Request[F],
     secretAccessKey: Credentials.SecretAccessKey,
     region: Region,
@@ -155,7 +155,7 @@ object AwsPresigning {
     presignRequestHashing(request, secretAccessKey, region, serviceName)
 
   /* TODO: Inline for 7.0 release. */
-  private def presignRequestHashing[F[_]: MonadCancelThrow: Hashing](
+  private def presignRequestHashing[F[_]: Hashing: MonadCancelThrow](
     request: Request[F],
     secretAccessKey: Credentials.SecretAccessKey,
     region: Region,
