@@ -18,6 +18,7 @@ package com.magine.http4s.aws
 
 import cats.Applicative
 import cats.ApplicativeThrow
+import cats.effect.MonadCancelThrow
 import cats.effect.Temporal
 import cats.syntax.all.*
 import com.magine.aws.Region
@@ -52,11 +53,11 @@ object AwsSigning {
       override def sign(request: Request[F]): F[Request[F]] =
         for {
           credentials <- provider.credentials
-          prepared <- AwsSigning.prepareRequest(
+          prepared <- prepareRequest(
             request = request,
             sessionToken = credentials.sessionToken
           )
-          signed <- AwsSigning.signRequest(
+          signed <- signRequestHashing(
             request = prepared,
             accessKeyId = credentials.accessKeyId,
             secretAccessKey = credentials.secretAccessKey,
@@ -100,7 +101,34 @@ object AwsSigning {
     * The specified request should have required headers, as
     * added by [[prepareRequest]].
     */
-  def signRequest[F[_]: ApplicativeThrow](
+  def signRequest[F[_]: Hashing: MonadCancelThrow](
+    request: Request[F],
+    accessKeyId: Credentials.AccessKeyId,
+    secretAccessKey: Credentials.SecretAccessKey,
+    region: Region,
+    serviceName: AwsServiceName
+  ): F[Request[F]] =
+    signRequestHashing(request, accessKeyId, secretAccessKey, region, serviceName)
+
+  /* TODO: Inline for 7.0 release. */
+  private def signRequestHashing[F[_]: Hashing: MonadCancelThrow](
+    request: Request[F],
+    accessKeyId: Credentials.AccessKeyId,
+    secretAccessKey: Credentials.SecretAccessKey,
+    region: Region,
+    serviceName: AwsServiceName
+  ): F[Request[F]] =
+    for {
+      canonicalRequest <- CanonicalRequest.fromRequest(request, serviceName)
+      requestDateTime <- RequestDateTime.fromRequest(request)
+      credentialScope = CredentialScope(region, requestDateTime.date, serviceName)
+      signingContent = Signature.signingContent(canonicalRequest, credentialScope, requestDateTime)
+      signingKey <- Signature.signingKey(region, requestDateTime.date, secretAccessKey, serviceName)
+      signature <- Signature.sign(signingKey, signingContent)
+    } yield Authorization.putIfAbsent(request, accessKeyId, canonicalRequest, credentialScope, signature)
+
+  /* TODO: Remove for 7.0 release. */
+  private[aws] def signRequest[F[_]: ApplicativeThrow](
     request: Request[F],
     accessKeyId: Credentials.AccessKeyId,
     secretAccessKey: Credentials.SecretAccessKey,

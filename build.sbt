@@ -37,6 +37,9 @@ inThisBuild(
       ),
       ProblemFilters.exclude[DirectMissingMethodProblem](
         "com.magine.http4s.aws.AwsPresigning.apply"
+      ),
+      ProblemFilters.exclude[DirectMissingMethodProblem](
+        "com.magine.http4s.aws.AwsSigning.signRequest"
       )
     ),
     organization := "com.magine",
