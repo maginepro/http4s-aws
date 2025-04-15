@@ -31,6 +31,15 @@ inThisBuild(
       ),
       ProblemFilters.exclude[IncompatibleMethTypeProblem](
         "com.magine.http4s.aws.CredentialsProvider.securityTokenService"
+      ),
+      ProblemFilters.exclude[DirectMissingMethodProblem](
+        "com.magine.http4s.aws.AwsPresigning.presignRequest"
+      ),
+      ProblemFilters.exclude[DirectMissingMethodProblem](
+        "com.magine.http4s.aws.AwsPresigning.apply"
+      ),
+      ProblemFilters.exclude[DirectMissingMethodProblem](
+        "com.magine.http4s.aws.AwsSigning.signRequest"
       )
     ),
     organization := "com.magine",

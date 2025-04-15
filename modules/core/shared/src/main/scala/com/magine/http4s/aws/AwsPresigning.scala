@@ -18,12 +18,14 @@ package com.magine.http4s.aws
 
 import cats.Applicative
 import cats.ApplicativeThrow
+import cats.effect.MonadCancelThrow
 import cats.effect.Temporal
 import cats.syntax.all.*
 import com.magine.aws.Region
 import com.magine.http4s.aws.headers.*
 import com.magine.http4s.aws.headers.`X-Amz-Algorithm`.`AWS4-HMAC-SHA256`
 import com.magine.http4s.aws.internal.*
+import fs2.hashing.Hashing
 import org.http4s.Request
 import scala.concurrent.duration.FiniteDuration
 
@@ -44,7 +46,7 @@ object AwsPresigning {
     * The presigning will target the specified region and
     * service, and use the specified expiry time.
     */
-  def apply[F[_]: Temporal](
+  def apply[F[_]: Hashing: Temporal](
     provider: CredentialsProvider[F],
     region: Region,
     serviceName: AwsServiceName,
@@ -62,7 +64,35 @@ object AwsPresigning {
             serviceName = serviceName,
             sessionToken = credentials.sessionToken
           )
-          presigned <- presignRequest(
+          presigned <- presignRequestHashing(
+            request = prepared,
+            secretAccessKey = credentials.secretAccessKey,
+            region = region,
+            serviceName = serviceName
+          )
+        } yield presigned
+    }
+
+  /* TODO: Remove for 7.0 release. */
+  private[aws] def apply[F[_]: Temporal](
+    provider: CredentialsProvider[F],
+    region: Region,
+    serviceName: AwsServiceName,
+    expiry: FiniteDuration
+  ): AwsPresigning[F] =
+    new AwsPresigning[F] {
+      override def presign(request: Request[F]): F[Request[F]] =
+        for {
+          credentials <- provider.credentials
+          prepared <- prepareRequest(
+            request = request,
+            expiry = expiry,
+            accessKeyId = credentials.accessKeyId,
+            region = region,
+            serviceName = serviceName,
+            sessionToken = credentials.sessionToken
+          )
+          presigned <- presignRequestLegacy(
             request = prepared,
             secretAccessKey = credentials.secretAccessKey,
             region = region,
@@ -116,18 +146,52 @@ object AwsPresigning {
     * The specified request should have required headers and
     * query parameters, as added by [[prepareRequest]].
     */
-  def presignRequest[F[_]: ApplicativeThrow](
+  def presignRequest[F[_]: Hashing: MonadCancelThrow](
     request: Request[F],
     secretAccessKey: Credentials.SecretAccessKey,
     region: Region,
-    serviceName: AwsServiceName,
+    serviceName: AwsServiceName
+  ): F[Request[F]] =
+    presignRequestHashing(request, secretAccessKey, region, serviceName)
+
+  /* TODO: Inline for 7.0 release. */
+  private def presignRequestHashing[F[_]: Hashing: MonadCancelThrow](
+    request: Request[F],
+    secretAccessKey: Credentials.SecretAccessKey,
+    region: Region,
+    serviceName: AwsServiceName
+  ): F[Request[F]] =
+    for {
+      requestDateTime <- RequestDateTime.fromRequestQueryParam(request)
+      canonicalRequest = CanonicalRequest.fromRequestUnsignedPayload(request, serviceName)
+      credentialScope = CredentialScope(region, requestDateTime.date, serviceName)
+      signingContent = Signature.signingContent(canonicalRequest, credentialScope, requestDateTime)
+      signingKey <- Signature.signingKey(region, requestDateTime.date, secretAccessKey, serviceName)
+      signature <- Signature.sign(signingKey, signingContent).map(_.value)
+    } yield `X-Amz-Signature`.putQueryParam(signature)(request)
+
+  /* TODO: Remove for 7.0 release. */
+  private[aws] def presignRequest[F[_]: ApplicativeThrow](
+    request: Request[F],
+    secretAccessKey: Credentials.SecretAccessKey,
+    region: Region,
+    serviceName: AwsServiceName
+  ): F[Request[F]] =
+    presignRequestLegacy(request, secretAccessKey, region, serviceName)
+
+  /* TODO: Remove for 7.0 release. */
+  private def presignRequestLegacy[F[_]: ApplicativeThrow](
+    request: Request[F],
+    secretAccessKey: Credentials.SecretAccessKey,
+    region: Region,
+    serviceName: AwsServiceName
   ): F[Request[F]] =
     RequestDateTime.fromRequestQueryParam(request).map { requestDateTime =>
       val canonicalRequest = CanonicalRequest.fromRequestUnsignedPayload(request, serviceName)
       val credentialScope = CredentialScope(region, requestDateTime.date, serviceName)
-      val signingContent = Signature.signingContent(canonicalRequest, credentialScope, requestDateTime)
-      val signingKey = Signature.signingKey(region, requestDateTime.date, secretAccessKey, serviceName)
-      val signature = Signature.sign(signingKey, signingContent).value
+      val signingContent = Signature.Legacy.signingContent(canonicalRequest, credentialScope, requestDateTime)
+      val signingKey = Signature.Legacy.signingKey(region, requestDateTime.date, secretAccessKey, serviceName)
+      val signature = Signature.Legacy.sign(signingKey, signingContent).value
       `X-Amz-Signature`.putQueryParam(signature)(request)
     }
 }
