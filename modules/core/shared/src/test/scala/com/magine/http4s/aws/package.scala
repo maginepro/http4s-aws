@@ -28,43 +28,43 @@ import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.Gen
 
 package object aws {
-  implicit val awsProfileRoleArnGen: Gen[AwsProfile.RoleArn] =
+  val awsProfileRoleArnGen: Gen[AwsProfile.RoleArn] =
     arbitrary[String].map(AwsProfile.RoleArn(_))
 
   implicit val awsProfileRoleArnArbitrary: Arbitrary[AwsProfile.RoleArn] =
     Arbitrary(awsProfileRoleArnGen)
 
-  implicit val awsProfileRoleSessionNameGen: Gen[AwsProfile.RoleSessionName] =
+  val awsProfileRoleSessionNameGen: Gen[AwsProfile.RoleSessionName] =
     arbitrary[String].map(AwsProfile.RoleSessionName(_))
 
   implicit val awsProfileRoleSessionNameArbitrary: Arbitrary[AwsProfile.RoleSessionName] =
     Arbitrary(awsProfileRoleSessionNameGen)
 
-  implicit val awsProfileDurationSecondsGen: Gen[AwsProfile.DurationSeconds] =
+  val awsProfileDurationSecondsGen: Gen[AwsProfile.DurationSeconds] =
     arbitrary[Int].map(AwsProfile.DurationSeconds(_))
 
   implicit val awsProfileDurationSecondsArbitrary: Arbitrary[AwsProfile.DurationSeconds] =
     Arbitrary(awsProfileDurationSecondsGen)
 
-  implicit val mfaSerialGen: Gen[MfaSerial] =
+  val mfaSerialGen: Gen[MfaSerial] =
     arbitrary[String].map(MfaSerial(_))
 
   implicit val mfaSerialArbitrary: Arbitrary[MfaSerial] =
     Arbitrary(mfaSerialGen)
 
-  implicit val regionGen: Gen[Region] =
+  val regionGen: Gen[Region] =
     Gen.oneOf(Region.values)
 
   implicit val regionArbitrary: Arbitrary[Region] =
     Arbitrary(regionGen)
 
-  implicit val awsProfileNameGen: Gen[AwsProfileName] =
+  val awsProfileNameGen: Gen[AwsProfileName] =
     arbitrary[String].map(AwsProfileName(_))
 
   implicit val awsProfileNameArbitrary: Arbitrary[AwsProfileName] =
     Arbitrary(awsProfileNameGen)
 
-  implicit val awsProfileGen: Gen[AwsProfile] =
+  val awsProfileGen: Gen[AwsProfile] =
     for {
       profileName <- arbitrary[AwsProfileName]
       roleArn <- arbitrary[Option[AwsProfile.RoleArn]]
@@ -86,7 +86,7 @@ package object aws {
   implicit val awsProfileArbitrary: Arbitrary[AwsProfile] =
     Arbitrary(awsProfileGen)
 
-  implicit val awsProfileResolvedGen: Gen[AwsProfileResolved] =
+  val awsProfileResolvedGen: Gen[AwsProfileResolved] =
     for {
       profileName <- arbitrary[AwsProfileName]
       roleArn <- arbitrary[AwsProfile.RoleArn]
@@ -108,25 +108,31 @@ package object aws {
   implicit val awsProfileResolvedArbitrary: Arbitrary[AwsProfileResolved] =
     Arbitrary(awsProfileResolvedGen)
 
-  implicit val credentialsAccessKeyIdGen: Gen[Credentials.AccessKeyId] =
+  val awsServiceNameGen: Gen[AwsServiceName] =
+    arbitrary[String].map(AwsServiceName(_))
+
+  implicit val awsServiceNameArbitrary: Arbitrary[AwsServiceName] =
+    Arbitrary(awsServiceNameGen)
+
+  val credentialsAccessKeyIdGen: Gen[Credentials.AccessKeyId] =
     arbitrary[String].map(Credentials.AccessKeyId(_))
 
   implicit val credentialsAccessKeyIdArbtirary: Arbitrary[Credentials.AccessKeyId] =
     Arbitrary(credentialsAccessKeyIdGen)
 
-  implicit val credentialsSecretAccessKeyGen: Gen[Credentials.SecretAccessKey] =
+  val credentialsSecretAccessKeyGen: Gen[Credentials.SecretAccessKey] =
     arbitrary[String].map(Credentials.SecretAccessKey(_))
 
   implicit val credentialsSecretAccessKeyArbitrary: Arbitrary[Credentials.SecretAccessKey] =
     Arbitrary(credentialsSecretAccessKeyGen)
 
-  implicit val credentialsSessionTokenGen: Gen[Credentials.SessionToken] =
+  val credentialsSessionTokenGen: Gen[Credentials.SessionToken] =
     arbitrary[String].map(Credentials.SessionToken(_))
 
   implicit val credentialsSessionTokenArbitrary: Arbitrary[Credentials.SessionToken] =
     Arbitrary(credentialsSessionTokenGen)
 
-  implicit val credentialsGen: Gen[Credentials] =
+  val credentialsGen: Gen[Credentials] =
     for {
       accessKeyId <- arbitrary[Credentials.AccessKeyId]
       secretAccessKey <- arbitrary[Credentials.SecretAccessKey]
@@ -144,19 +150,19 @@ package object aws {
   def awsCredentialsCacheFileName(profile: AwsProfileResolved): AwsCredentialsCache.FileName =
     AwsCredentialsCache.FileName.fromProfile[SyncIO](profile).unsafeRunSync()
 
-  implicit val awsCredentialsCacheFileNameGen: Gen[AwsCredentialsCache.FileName] =
+  val awsCredentialsCacheFileNameGen: Gen[AwsCredentialsCache.FileName] =
     arbitrary[AwsProfileResolved].flatMap(awsCredentialsCacheFileName(_))
 
   implicit val awsCredentialsCacheFileNameArbitrary: Arbitrary[AwsCredentialsCache.FileName] =
     Arbitrary(awsCredentialsCacheFileNameGen)
 
-  implicit val awsAssumedRoleAssumedRoleIdGen: Gen[AwsAssumedRole.AssumedRoleId] =
+  val awsAssumedRoleAssumedRoleIdGen: Gen[AwsAssumedRole.AssumedRoleId] =
     arbitrary[String].map(AwsAssumedRole.AssumedRoleId(_))
 
   implicit val awsAssumedRoleAssumedRoleIdArbitrary: Arbitrary[AwsAssumedRole.AssumedRoleId] =
     Arbitrary(awsAssumedRoleAssumedRoleIdGen)
 
-  implicit val awsAssumedRoleAssumedRoleArnGen: Gen[AwsAssumedRole.AssumedRoleArn] =
+  val awsAssumedRoleAssumedRoleArnGen: Gen[AwsAssumedRole.AssumedRoleArn] =
     arbitrary[String].map(AwsAssumedRole.AssumedRoleArn(_))
 
   implicit val awsAssumedRoleAssumedRoleArnArbitrary: Arbitrary[AwsAssumedRole.AssumedRoleArn] =
@@ -203,7 +209,7 @@ package object aws {
       assumedRole <- awsAssumedRoleGen(expiration, profile)
     } yield assumedRole
 
-  implicit val awsAssumedRoleGen: Gen[AwsAssumedRole] =
+  val awsAssumedRoleGen: Gen[AwsAssumedRole] =
     for {
       expiration <- arbitrary[Instant]
       profile <- arbitrary[AwsProfileResolved]
@@ -213,7 +219,7 @@ package object aws {
   implicit val awsAssumedRoleArbitrary: Arbitrary[AwsAssumedRole] =
     Arbitrary(awsAssumedRoleGen)
 
-  implicit val tokenCodeGen: Gen[TokenCode] =
+  val tokenCodeGen: Gen[TokenCode] =
     for {
       digits <- Gen.listOfN(6, Gen.numChar).map(_.mkString)
       tokenCode <- TokenCode(digits).map(Gen.const).getOrElse(Gen.fail)
