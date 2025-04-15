@@ -16,16 +16,16 @@
 
 package com.magine.http4s.aws.internal
 
-import cats.effect.Sync
+import cats.effect.Async
 import cats.parse.Parser
 import cats.syntax.all.*
 import com.magine.http4s.aws.AwsProfileName
 import com.magine.http4s.aws.MissingCredentials
 import com.magine.http4s.aws.internal.Setting.ConfigFile
-import java.nio.charset.StandardCharsets.UTF_8
-import java.nio.file.Files
-import java.nio.file.NoSuchFileException
-import java.nio.file.Path
+import fs2.io.file.Files
+import fs2.io.file.NoSuchFileException
+import fs2.io.file.Path
+import fs2.text.utf8
 
 /**
   * Capability to read configuration in `~/.aws/config`.
@@ -35,7 +35,7 @@ private[aws] trait AwsConfig[F[_]] {
 }
 
 private[aws] object AwsConfig {
-  def default[F[_]: Sync]: AwsConfig[F] =
+  def default[F[_]: Async]: AwsConfig[F] =
     new AwsConfig[F] {
       override def read(profileName: AwsProfileName): F[AwsProfile] =
         for {
@@ -52,8 +52,12 @@ private[aws] object AwsConfig {
         } yield profile
 
       def readIniFile(path: Path): F[IniFile] =
-        Sync[F]
-          .blocking(new String(Files.readAllBytes(path), UTF_8))
+        Files
+          .forAsync[F]
+          .readAll(path)
+          .through(utf8.decode)
+          .compile
+          .foldMonoid
           .adaptError { case _: NoSuchFileException => MissingCredentials() }
           .flatMap(IniFile.parse(_).leftMap(failedToParse(path, _)).liftTo[F])
 

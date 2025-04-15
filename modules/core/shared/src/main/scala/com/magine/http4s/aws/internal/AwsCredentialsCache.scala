@@ -16,13 +16,19 @@
 
 package com.magine.http4s.aws.internal
 
+import cats.effect.Async
 import cats.effect.Ref
 import cats.effect.Sync
 import cats.syntax.all.*
 import com.magine.http4s.aws.MfaSerial
 import fs2.Chunk
+import fs2.Stream
 import fs2.hashing.HashAlgorithm
 import fs2.hashing.Hashing
+import fs2.io.file.Files
+import fs2.io.file.NoSuchFileException
+import fs2.io.file.Path
+import fs2.text.utf8
 import io.circe.Decoder
 import io.circe.Json
 import io.circe.JsonObject
@@ -30,10 +36,6 @@ import io.circe.Printer
 import io.circe.parser.decode
 import io.circe.syntax.*
 import java.nio.charset.StandardCharsets.UTF_8
-import java.nio.file.Files
-import java.nio.file.NoSuchFileException
-import java.nio.file.Path
-import java.nio.file.Paths
 
 /**
   * Capability to read and write credentials in `~/.aws/cli/cache`.
@@ -45,28 +47,21 @@ private[aws] trait AwsCredentialsCache[F[_]] {
 }
 
 private[aws] object AwsCredentialsCache {
-  def default[F[_]: Sync]: AwsCredentialsCache[F] =
+  def default[F[_]: Async]: AwsCredentialsCache[F] =
     new AwsCredentialsCache[F] {
-      private def ensurePathExists(path: Path): F[Path] =
-        Sync[F].blocking(
-          if (path.toFile.exists) path
-          else Files.createDirectories(path)
-        )
+      private val files: Files[F] = Files.forAsync[F]
 
-      private def missingUserHome: Throwable =
-        new RuntimeException("Missing system property user.home")
+      private def ensurePathExists(path: Path): F[Path] =
+        files.exists(path).ifM(path.pure, files.createDirectories(path).as(path))
 
       private def cachePath: F[Path] =
-        Sync[F]
-          .delay(Option(System.getProperty("user.home")))
-          .flatMap(_.toRight(missingUserHome).liftTo[F])
-          .map(Paths.get(_, ".aws/cli/cache"))
+        files.userHome.map(_.resolve(".aws/cli/cache"))
 
       private def existingCachePath: F[Path] =
         cachePath.flatMap(ensurePathExists)
 
       private def writeFile(path: Path, json: Json): F[Unit] =
-        Sync[F].blocking(Files.write(path, json.spaces2.getBytes(UTF_8))).void
+        Stream(json.spaces2).through(files.writeUtf8(path)).compile.drain
 
       override def read(profile: AwsProfileResolved): F[Option[AwsAssumedRole]] =
         FileName.fromProfile(profile).flatMap { fileName =>
@@ -74,8 +69,11 @@ private[aws] object AwsCredentialsCache {
             implicit val decoder: Decoder[AwsAssumedRole] =
               AwsAssumedRole.decoder(fileName)
 
-            Sync[F]
-              .blocking(new String(Files.readAllBytes(path), UTF_8))
+            files
+              .readAll(path)
+              .through(utf8.decode)
+              .compile
+              .foldMonoid
               .flatMap(decode[AwsAssumedRole](_).map(_.some).liftTo[F])
               .recover { case _: NoSuchFileException => none }
           }
@@ -154,7 +152,7 @@ private[aws] object AwsCredentialsCache {
           )
         )
 
-      hash.map(hash => new FileName(Paths.get(s"$hash.json")) {})
+      hash.map(hash => new FileName(Path(s"$hash.json")) {})
     }
 
     def fromProfile[F[_]: Sync](profile: AwsProfileResolved): F[FileName] =

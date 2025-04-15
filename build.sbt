@@ -25,22 +25,16 @@ inThisBuild(
     githubWorkflowTargetBranches := Seq("**"),
     licenses := Seq(License.Apache2),
     mimaBinaryIssueFilters ++= Seq(
+      // format: off
       ProblemFilters.exclude[Problem]("com.magine.http4s.aws.internal.*"),
-      ProblemFilters.exclude[DirectMissingMethodProblem](
-        "com.magine.http4s.aws.CredentialsProvider.securityTokenService"
-      ),
-      ProblemFilters.exclude[IncompatibleMethTypeProblem](
-        "com.magine.http4s.aws.CredentialsProvider.securityTokenService"
-      ),
-      ProblemFilters.exclude[DirectMissingMethodProblem](
-        "com.magine.http4s.aws.AwsPresigning.presignRequest"
-      ),
-      ProblemFilters.exclude[DirectMissingMethodProblem](
-        "com.magine.http4s.aws.AwsPresigning.apply"
-      ),
-      ProblemFilters.exclude[DirectMissingMethodProblem](
-        "com.magine.http4s.aws.AwsSigning.signRequest"
-      )
+      /* TODO: Remove for 7.0 release. */
+      ProblemFilters.exclude[DirectMissingMethodProblem]("com.magine.http4s.aws.CredentialsProvider.securityTokenService"),
+      ProblemFilters.exclude[IncompatibleMethTypeProblem]("com.magine.http4s.aws.CredentialsProvider.securityTokenService"),
+      ProblemFilters.exclude[DirectMissingMethodProblem]("com.magine.http4s.aws.AwsPresigning.presignRequest"),
+      ProblemFilters.exclude[DirectMissingMethodProblem]("com.magine.http4s.aws.AwsPresigning.apply"),
+      ProblemFilters.exclude[DirectMissingMethodProblem]("com.magine.http4s.aws.AwsSigning.signRequest"),
+      ProblemFilters.exclude[IncompatibleMethTypeProblem]("com.magine.http4s.aws.CredentialsProvider.credentialsFile")
+      // format: on
     ),
     organization := "com.magine",
     organizationName := "Magine Pro",

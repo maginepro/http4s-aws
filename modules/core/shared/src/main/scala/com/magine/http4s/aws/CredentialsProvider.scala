@@ -37,10 +37,11 @@ import com.magine.http4s.aws.internal.ExpiringCredentials
 import com.magine.http4s.aws.internal.IniFile
 import com.magine.http4s.aws.internal.Setting.*
 import fs2.hashing.Hashing
+import fs2.io.file.Files
+import fs2.io.file.NoSuchFileException
+import fs2.io.file.Path
+import fs2.text.utf8
 import java.nio.charset.StandardCharsets.UTF_8
-import java.nio.file.Files
-import java.nio.file.NoSuchFileException
-import java.nio.file.Path
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 import org.http4s.Method
@@ -214,24 +215,36 @@ object CredentialsProvider {
     * are cached indefinitely. This means subsequent updates to the
     * location, profile, or file will not be taken into account.
     */
-  def credentialsFile[F[_]: Sync]: F[CredentialsProvider[F]] =
-    Profile.readOrDefault.flatMap(credentialsFile(_))
+  def credentialsFile[F[_]: Async]: F[CredentialsProvider[F]] =
+    credentialsFileAsync
 
-    /**
-      * Returns a new [[CredentialsProvider]] which reads credentials
-      * from `~/.aws/credentials` for the specified profile.
-      *
-      * The location of the credentials file can be set using either:
-      *
-      * - the `aws.sharedCredentialsFile` system property, or
-      * - the `AWS_SHARED_CREDENTIALS_FILE` environment variable, or
-      * - it will default to `~/.aws/credentials` if neither is set.
-      *
-      * Once credentials have successfully been read, the credentials
-      * are cached indefinitely. This means subsequent updates to the
-      * location or file will not be taken into account.
-      */
-  def credentialsFile[F[_]: Sync](profileName: AwsProfileName): F[CredentialsProvider[F]] =
+  /* TODO: Inline for 7.0 release. */
+  private def credentialsFileAsync[F[_]: Async]: F[CredentialsProvider[F]] =
+    Profile.readOrDefault.flatMap(credentialsFileAsync(_))
+
+  /* TODO: Remove for 7.0 release. */
+  private[aws] def credentialsFile[F[_]: Sync]: F[CredentialsProvider[F]] =
+    Profile.readOrDefault.flatMap(credentialsFileSync(_))
+
+  /**
+    * Returns a new [[CredentialsProvider]] which reads credentials
+    * from `~/.aws/credentials` for the specified profile.
+    *
+    * The location of the credentials file can be set using either:
+    *
+    * - the `aws.sharedCredentialsFile` system property, or
+    * - the `AWS_SHARED_CREDENTIALS_FILE` environment variable, or
+    * - it will default to `~/.aws/credentials` if neither is set.
+    *
+    * Once credentials have successfully been read, the credentials
+    * are cached indefinitely. This means subsequent updates to the
+    * location or file will not be taken into account.
+    */
+  def credentialsFile[F[_]: Async](profileName: AwsProfileName): F[CredentialsProvider[F]] =
+    credentialsFileAsync(profileName)
+
+  /* TODO: Inline for 7.0 release. */
+  private[aws] def credentialsFileAsync[F[_]: Async](profileName: AwsProfileName): F[CredentialsProvider[F]] =
     Ref[F].of(Option.empty[Credentials]).map { ref =>
       new CredentialsProvider[F] {
         override val credentials: F[Credentials] =
@@ -264,12 +277,64 @@ object CredentialsProvider {
           }
 
         private def readIniFile(path: Path): F[IniFile] =
-          Sync[F]
-            .blocking(new String(Files.readAllBytes(path), UTF_8))
+          Files
+            .forAsync[F]
+            .readAll(path)
+            .through(utf8.decode)
+            .compile
+            .foldMonoid
             .adaptError { case _: NoSuchFileException => MissingCredentials() }
             .flatMap(IniFile.parse(_).leftMap(failedToParse(path, _)).liftTo[F])
 
         private def failedToParse(path: Path, error: Parser.Error): Throwable =
+          new RuntimeException(s"Failed to parse credentials file at $path: ${error.show}")
+      }
+    }
+
+  /* TODO: Remove for 7.0 release. */
+  private[aws] def credentialsFile[F[_]: Sync](profileName: AwsProfileName): F[CredentialsProvider[F]] =
+    credentialsFileSync(profileName)
+
+  /* TODO: Remove for 7.0 release. */
+  private[aws] def credentialsFileSync[F[_]: Sync](profileName: AwsProfileName): F[CredentialsProvider[F]] =
+    Ref[F].of(Option.empty[Credentials]).map { ref =>
+      new CredentialsProvider[F] {
+        override val credentials: F[Credentials] =
+          ref.get.flatMap {
+            case Some(credentials) =>
+              credentials.pure
+            case None =>
+              for {
+                credentialsFilePath <- SharedCredentialsFileSync.read
+                  .map(_.toRight(MissingCredentials()))
+                  .rethrow
+                credentialsFile <- readIniFile(credentialsFilePath)
+                accessKeyId <- credentialsFile
+                  .read(profileName.value, "aws_access_key_id")
+                  .map(Credentials.AccessKeyId(_))
+                  .toRight(MissingCredentials())
+                  .liftTo
+                secretAccessKey <- credentialsFile
+                  .read(profileName.value, "aws_secret_access_key")
+                  .map(Credentials.SecretAccessKey(_))
+                  .toRight(MissingCredentials())
+                  .liftTo
+                sessionToken <- credentialsFile
+                  .read(profileName.value, "aws_session_token")
+                  .map(Credentials.SessionToken(_))
+                  .pure
+                credentials <- Credentials(accessKeyId, secretAccessKey, sessionToken).pure
+                _ <- ref.set(credentials.some)
+              } yield credentials
+          }
+
+        private def readIniFile(path: java.nio.file.Path): F[IniFile] =
+          Sync[F]
+            .blocking(new String(java.nio.file.Files.readAllBytes(path), UTF_8))
+            .adaptError { case _: java.nio.file.NoSuchFileException => MissingCredentials() }
+            .flatMap(IniFile.parse(_).leftMap(failedToParse(path, _)).liftTo[F])
+
+        private def failedToParse(path: java.nio.file.Path, error: Parser.Error): Throwable =
           new RuntimeException(s"Failed to parse credentials file at $path: ${error.show}")
       }
     }
@@ -292,7 +357,7 @@ object CredentialsProvider {
     */
   def default[F[_]: Async](client: Client[F]): Resource[F, CredentialsProvider[F]] =
     for {
-      credentialsFile <- CredentialsProvider.credentialsFile.toResource
+      credentialsFile <- CredentialsProvider.credentialsFileAsync.toResource
       containerEndpoint <- CredentialsProvider.containerEndpoint(client)
       firstSuccessfulProvider <- Ref[F].of(Option.empty[CredentialsProvider[F]]).toResource
       providers = List(systemProperties, environmentVariables, credentialsFile, containerEndpoint)
@@ -339,7 +404,7 @@ object CredentialsProvider {
     for {
       profileName <- Profile.readOrDefault
       profile <- AwsConfig.default.read(profileName).flatMap(_.resolve)
-      provider <- CredentialsProvider.credentialsFile(profile.sourceProfile)
+      provider <- credentialsFileAsync(profile.sourceProfile)
       securityTokenService <- securityTokenService(
         profile = profile,
         tokenCodeProvider = TokenCodeProvider.default[F],
@@ -356,7 +421,7 @@ object CredentialsProvider {
     for {
       profileName <- Profile.readOrDefault
       profile <- AwsConfig.default.read(profileName).flatMap(_.resolve)
-      provider <- CredentialsProvider.credentialsFile(profile.sourceProfile)
+      provider <- credentialsFileAsync(profile.sourceProfile)
       securityTokenService <- securityTokenService(
         profile = profile,
         tokenCodeProvider = TokenCodeProvider.default[F],
@@ -422,7 +487,7 @@ object CredentialsProvider {
   ): F[CredentialsProvider[F]] =
     for {
       profile <- AwsConfig.default.read(profileName).flatMap(_.resolve)
-      provider <- CredentialsProvider.credentialsFile(profile.sourceProfile)
+      provider <- credentialsFileAsync(profile.sourceProfile)
       securityTokenService <- securityTokenService(
         profile = profile,
         tokenCodeProvider = TokenCodeProvider.default[F],
@@ -439,7 +504,7 @@ object CredentialsProvider {
   ): F[CredentialsProvider[F]] =
     for {
       profile <- AwsConfig.default.read(profileName).flatMap(_.resolve)
-      provider <- CredentialsProvider.credentialsFile(profile.sourceProfile)
+      provider <- credentialsFileAsync(profile.sourceProfile)
       securityTokenService <- securityTokenService(
         profile = profile,
         tokenCodeProvider = TokenCodeProvider.default[F],
@@ -455,7 +520,7 @@ object CredentialsProvider {
   ): F[CredentialsProvider[F]] =
     for {
       profile <- AwsConfig.default.read(profileName).flatMap(_.resolve)
-      provider <- CredentialsProvider.credentialsFile(profile.sourceProfile)
+      provider <- credentialsFileAsync(profile.sourceProfile)
       securityTokenService <- securityTokenService(
         profile = profile,
         tokenCodeProvider = tokenCodeProvider,
@@ -473,7 +538,7 @@ object CredentialsProvider {
   ): F[CredentialsProvider[F]] =
     for {
       profile <- AwsConfig.default.read(profileName).flatMap(_.resolve)
-      provider <- CredentialsProvider.credentialsFile(profile.sourceProfile)
+      provider <- credentialsFileAsync(profile.sourceProfile)
       securityTokenService <- securityTokenService(
         profile = profile,
         tokenCodeProvider = tokenCodeProvider,
