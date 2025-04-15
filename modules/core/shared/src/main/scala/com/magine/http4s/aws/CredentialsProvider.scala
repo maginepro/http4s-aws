@@ -164,7 +164,7 @@ object CredentialsProvider {
     def sleepUntilRefresh(ref: Ref[F, Either[Throwable, ExpiringCredentials]]): F[Unit] =
       for {
         credentials <- ref.get
-        now <- Async[F].realTimeInstant
+        now <- Async[F].realTime.map(d => Instant.EPOCH.plusNanos(d.toNanos))
         refreshAt = Ordering[Instant].min(
           now.plus(1, ChronoUnit.HOURS),
           credentials.fold(_ => now, _.expiresAt.minus(15, ChronoUnit.MINUTES))
@@ -177,7 +177,7 @@ object CredentialsProvider {
       for {
         _ <- sleepUntilRefresh(ref)
         credentials <- requestCredentials.attempt
-        now <- Async[F].realTimeInstant
+        now <- Async[F].realTime.map(d => Instant.EPOCH.plusNanos(d.toNanos))
         _ <- ref.update {
           case right @ Right(existing) if credentials.isLeft && existing.isFresh(now) => right
           case _ => credentials
@@ -539,7 +539,7 @@ object CredentialsProvider {
 
         def action: F[Action] =
           Deferred[F, Result].flatMap { deferred =>
-            F.realTimeInstant.flatMap { now =>
+            F.realTime.map(d => Instant.EPOCH.plusNanos(d.toNanos)).flatMap { now =>
               ref.modify {
                 case cached @ Cached(Some(assumedRole)) if assumedRole.isFresh(now) =>
                   (cached, Return(assumedRole.credentials))

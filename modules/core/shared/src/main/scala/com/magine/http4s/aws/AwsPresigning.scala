@@ -26,6 +26,7 @@ import com.magine.http4s.aws.headers.*
 import com.magine.http4s.aws.headers.`X-Amz-Algorithm`.`AWS4-HMAC-SHA256`
 import com.magine.http4s.aws.internal.*
 import fs2.hashing.Hashing
+import java.time.Instant
 import org.http4s.Request
 import scala.concurrent.duration.FiniteDuration
 
@@ -127,7 +128,7 @@ object AwsPresigning {
     sessionToken: Option[Credentials.SessionToken]
   ): F[Request[F]] =
     for {
-      now <- Temporal[F].realTimeInstant
+      now <- Temporal[F].realTime.map(d => Instant.EPOCH.plusNanos(d.toNanos))
       credential = `X-Amz-Credential`(accessKeyId, now, region, serviceName)
       prepared <- Host
         .putIfAbsent(request)
