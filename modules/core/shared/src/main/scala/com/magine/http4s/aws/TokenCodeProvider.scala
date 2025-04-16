@@ -17,9 +17,12 @@
 package com.magine.http4s.aws
 
 import cats.Applicative
+import cats.effect.Async
 import cats.effect.Sync
+import cats.effect.std.Console
 import cats.syntax.all.*
-import scala.io.StdIn
+import fs2.io.stdinUtf8
+import fs2.text
 
 /**
   * Capability to return [[TokenCode]]s from [[MfaSerial]]s.
@@ -38,7 +41,36 @@ object TokenCodeProvider {
     * Returns a new [[TokenCodeProvider]] which prompts the user
     * for a [[TokenCode]] and then reads it from standard input.
     */
-  def default[F[_]: Sync]: TokenCodeProvider[F] =
+  def console[F[_]: Async]: TokenCodeProvider[F] =
+    new TokenCodeProvider[F] {
+      private val console: Console[F] =
+        Console.make
+
+      private def prompt(mfaSerial: MfaSerial): F[Unit] =
+        console.print(s"Enter MFA code for ${mfaSerial.value}: ")
+
+      private val readTokenCode: F[TokenCode] =
+        stdinUtf8[F](32)
+          .through(text.lines)
+          .map(_.trim)
+          .map(TokenCode(_).toRight(InvalidTokenCode()))
+          .rethrow
+          .take(1)
+          .compile
+          .onlyOrError
+
+      override def tokenCode(mfaSerial: MfaSerial): F[TokenCode] =
+        prompt(mfaSerial) >> readTokenCode
+    }
+
+  /**
+    * Alias for [[TokenCodeProvider.console]].
+    */
+  def default[F[_]: Async]: TokenCodeProvider[F] =
+    console
+
+  /* TODO: Remove for 7.0 release. */
+  private[aws] def default[F[_]: Sync]: TokenCodeProvider[F] =
     new TokenCodeProvider[F] {
       override def tokenCode(mfaSerial: MfaSerial): F[TokenCode] =
         Sync[F]
@@ -49,7 +81,7 @@ object TokenCodeProvider {
                 Option(console.readPassword()).map(_.mkString.trim)
               case None =>
                 println(s"Enter MFA code for ${mfaSerial.value}:")
-                Option(StdIn.readLine()).map(_.trim)
+                Option(scala.io.StdIn.readLine()).map(_.trim)
             }
           }
           .flatMap {
@@ -68,10 +100,10 @@ object TokenCodeProvider {
         new RuntimeException("Unexpected end of input")
     }
 
-    /**
-      * Returns a new [[TokenCodeProvider]] which always returns
-      * the specified [[TokenCode]].
-      */
+  /**
+    * Returns a new [[TokenCodeProvider]] which always returns
+    * the specified [[TokenCode]].
+    */
   def static[F[_]: Applicative](tokenCode: TokenCode): TokenCodeProvider[F] = {
     val result = tokenCode.pure[F]
     new TokenCodeProvider[F] {
