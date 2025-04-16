@@ -16,13 +16,14 @@
 
 package com.magine.http4s.aws.internal
 
+import cats.effect.Async
 import cats.effect.Sync
 import cats.syntax.all.*
 import com.magine.aws.Region
 import com.magine.http4s.aws.AwsProfileName
 import com.magine.http4s.aws.Credentials
-import java.nio.file.Path
-import java.nio.file.Paths
+import fs2.io.file.Files
+import fs2.io.file.Path
 import org.http4s.Header
 import org.http4s.Uri
 import org.typelevel.ci.*
@@ -99,16 +100,16 @@ private[aws] object Setting {
         Credentials.AccessKeyId(value).pure
     }
 
-  def ConfigFile[F[_]: Sync]: Setting[F, Path] =
+  def ConfigFile[F[_]: Async]: Setting[F, Path] =
     new Setting.Standard[F, Path](
       envName = "AWS_CONFIG_FILE",
       propName = "aws.configFile",
     ) {
       override def fallback: F[Option[Path]] =
-        Sync[F].delay(Option(System.getProperty("user.home")).map(Paths.get(_, ".aws/config")))
+        Files.forAsync[F].userHome.map(_.resolve(".aws/config").some)
 
       override def parse(value: String): F[Path] =
-        Sync[F].delay(Paths.get(value))
+        Path(value).pure
     }
 
   def ContainerAuthorizationToken[F[_]: Sync]: Setting[F, Header.Raw] =
@@ -212,15 +213,31 @@ private[aws] object Setting {
         Credentials.SessionToken(value).pure
     }
 
-  def SharedCredentialsFile[F[_]: Sync]: Setting[F, Path] =
+  def SharedCredentialsFile[F[_]: Async]: Setting[F, Path] =
     new Setting.Standard[F, Path](
       envName = "AWS_SHARED_CREDENTIALS_FILE",
       propName = "aws.sharedCredentialsFile",
     ) {
       override def fallback: F[Option[Path]] =
-        Sync[F].delay(Option(System.getProperty("user.home")).map(Paths.get(_, ".aws/credentials")))
+        Files.forAsync[F].userHome.map(_.resolve(".aws/credentials").some)
 
       override def parse(value: String): F[Path] =
-        Sync[F].delay(Paths.get(value))
+        Path(value).pure
+    }
+
+  /* TODO: Remove for 7.0 release. */
+  def SharedCredentialsFileSync[F[_]: Sync]: Setting[F, java.nio.file.Path] =
+    new Setting.Standard[F, java.nio.file.Path](
+      envName = "AWS_SHARED_CREDENTIALS_FILE",
+      propName = "aws.sharedCredentialsFile",
+    ) {
+      override def fallback: F[Option[java.nio.file.Path]] =
+        Sync[F].delay(
+          Option(System.getProperty("user.home"))
+            .map(java.nio.file.Paths.get(_, ".aws/credentials"))
+        )
+
+      override def parse(value: String): F[java.nio.file.Path] =
+        Sync[F].delay(java.nio.file.Paths.get(value))
     }
 }
