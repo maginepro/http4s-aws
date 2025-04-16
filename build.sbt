@@ -27,13 +27,14 @@ inThisBuild(
     mimaBinaryIssueFilters ++= Seq(
       // format: off
       ProblemFilters.exclude[Problem]("com.magine.http4s.aws.internal.*"),
-      /* TODO: Remove for 7.0 release. */
+      /* TODO: Remove below filters for 7.0 release. */
       ProblemFilters.exclude[DirectMissingMethodProblem]("com.magine.http4s.aws.CredentialsProvider.securityTokenService"),
       ProblemFilters.exclude[IncompatibleMethTypeProblem]("com.magine.http4s.aws.CredentialsProvider.securityTokenService"),
       ProblemFilters.exclude[DirectMissingMethodProblem]("com.magine.http4s.aws.AwsPresigning.presignRequest"),
       ProblemFilters.exclude[DirectMissingMethodProblem]("com.magine.http4s.aws.AwsPresigning.apply"),
       ProblemFilters.exclude[DirectMissingMethodProblem]("com.magine.http4s.aws.AwsSigning.signRequest"),
-      ProblemFilters.exclude[IncompatibleMethTypeProblem]("com.magine.http4s.aws.CredentialsProvider.credentialsFile")
+      ProblemFilters.exclude[IncompatibleMethTypeProblem]("com.magine.http4s.aws.CredentialsProvider.credentialsFile"),
+      ProblemFilters.exclude[IncompatibleMethTypeProblem]("com.magine.http4s.aws.TokenCodeProvider.default")
       // format: on
     ),
     organization := "com.magine",

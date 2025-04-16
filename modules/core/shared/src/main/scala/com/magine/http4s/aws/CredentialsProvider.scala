@@ -407,7 +407,7 @@ object CredentialsProvider {
       provider <- credentialsFileAsync(profile.sourceProfile)
       securityTokenService <- securityTokenService(
         profile = profile,
-        tokenCodeProvider = TokenCodeProvider.default[F],
+        tokenCodeProvider = TokenCodeProvider.console[F],
         credentialsCache = AwsCredentialsCache.default[F],
         sts = AwsSts.fromClient(client, provider, profile.region)
       )
@@ -424,7 +424,7 @@ object CredentialsProvider {
       provider <- credentialsFileAsync(profile.sourceProfile)
       securityTokenService <- securityTokenService(
         profile = profile,
-        tokenCodeProvider = TokenCodeProvider.default[F],
+        tokenCodeProvider = TokenCodeProvider.console[F],
         credentialsCache = AwsCredentialsCache.default[F],
         sts = AwsSts.fromClient(client, provider, profile.region)
       )
@@ -490,7 +490,7 @@ object CredentialsProvider {
       provider <- credentialsFileAsync(profile.sourceProfile)
       securityTokenService <- securityTokenService(
         profile = profile,
-        tokenCodeProvider = TokenCodeProvider.default[F],
+        tokenCodeProvider = TokenCodeProvider.console[F],
         credentialsCache = AwsCredentialsCache.default[F],
         sts = AwsSts.fromClient(client, provider, profile.region)
       )
@@ -507,7 +507,7 @@ object CredentialsProvider {
       provider <- credentialsFileAsync(profile.sourceProfile)
       securityTokenService <- securityTokenService(
         profile = profile,
-        tokenCodeProvider = TokenCodeProvider.default[F],
+        tokenCodeProvider = TokenCodeProvider.console[F],
         credentialsCache = AwsCredentialsCache.default[F],
         sts = AwsSts.fromClient(client, provider, profile.region)
       )
