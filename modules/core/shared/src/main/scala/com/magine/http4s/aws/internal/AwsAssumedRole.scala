@@ -66,7 +66,8 @@ private[aws] object AwsAssumedRole {
         sessionToken <- c.downField("Credentials").get[Credentials.SessionToken]("SessionToken")
         expirationField = c.downField("Credentials").downField("Expiration")
         expirationEpochSecond = expirationField.as[Long].map(Instant.ofEpochSecond)
-        expiration <- expirationEpochSecond.orElse(expirationField.as[Instant])
+        expirationIso8601 = expirationField.as(Iso8601.decoder)
+        expiration <- expirationEpochSecond.orElse(expirationIso8601)
         assumedRoleId <- c.downField("AssumedRoleUser").get[AssumedRoleId]("AssumedRoleId")
         assumedRoleArn <- c.downField("AssumedRoleUser").get[AssumedRoleArn]("Arn")
       } yield AwsAssumedRole(
