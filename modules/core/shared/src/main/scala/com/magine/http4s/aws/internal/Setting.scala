@@ -19,6 +19,7 @@ package com.magine.http4s.aws.internal
 import cats.effect.Async
 import cats.effect.Sync
 import cats.effect.std.Env
+import cats.effect.std.SystemProperties
 import cats.syntax.all.*
 import com.magine.aws.Region
 import com.magine.http4s.aws.AwsProfileName
@@ -65,9 +66,7 @@ private[aws] object Setting {
     def parse(value: String): F[A]
 
     final def prop: F[Option[A]] =
-      Sync[F]
-        .delay(Option(System.getProperty(propName)))
-        .flatMap(_.traverse(parse))
+      SystemProperties.make[F].get(propName).flatMap(_.traverse(parse))
 
     final def read: F[Option[A]] =
       prop
