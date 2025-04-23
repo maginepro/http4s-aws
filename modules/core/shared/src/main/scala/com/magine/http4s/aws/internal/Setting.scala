@@ -18,6 +18,7 @@ package com.magine.http4s.aws.internal
 
 import cats.effect.Async
 import cats.effect.Sync
+import cats.effect.std.Env
 import cats.syntax.all.*
 import com.magine.aws.Region
 import com.magine.http4s.aws.AwsProfileName
@@ -56,9 +57,7 @@ private[aws] object Setting {
     propName: String
   ) extends Setting[F, A] {
     final def env: F[Option[A]] =
-      Sync[F]
-        .delay(Option(System.getenv(envName)))
-        .flatMap(_.traverse(parse))
+      Env.make[F].get(envName).flatMap(_.traverse(parse))
 
     def fallback: F[Option[A]] =
       Sync[F].pure(None)
