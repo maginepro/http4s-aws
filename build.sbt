@@ -59,22 +59,22 @@ lazy val root = tlCrossRootProject
 
 lazy val core = crossProject(JVMPlatform)
   .in(file("modules/core"))
-  .settings(name := "http4s-aws")
-  .jvmSettings(
+  .settings(
+    name := "http4s-aws",
     libraryDependencies ++= Seq(
-      "co.fs2" %% "fs2-core" % fs2Version,
-      "com.magine" %% "aws-regions" % awsRegionsVersion,
-      "io.circe" %% "circe-parser" % circeVersion,
-      "org.http4s" %% "http4s-circe" % http4sVersion,
-      "org.http4s" %% "http4s-client" % http4sVersion,
-      "org.http4s" %% "http4s-core" % http4sVersion,
-      "org.typelevel" %% "case-insensitive" % caseInsensitiveVersion,
-      "org.typelevel" %% "cats-core" % catsVersion,
-      "org.typelevel" %% "cats-effect-kernel" % catsEffectVersion,
-      "org.typelevel" %% "cats-effect-testkit" % catsEffectVersion % Test,
-      "org.typelevel" %% "cats-effect" % catsEffectVersion,
-      "org.typelevel" %% "cats-parse" % catsParseVersion,
-      "org.typelevel" %% "munit-cats-effect" % munitCatsEffectVersion % Test,
-      "org.typelevel" %% "scalacheck-effect-munit" % scalaCheckEffectMunitVersion % Test
+      "co.fs2" %%% "fs2-core" % fs2Version,
+      "com.magine" %%% "aws-regions" % awsRegionsVersion,
+      "io.circe" %%% "circe-parser" % circeVersion,
+      "org.http4s" %%% "http4s-circe" % http4sVersion,
+      "org.http4s" %%% "http4s-client" % http4sVersion,
+      "org.http4s" %%% "http4s-core" % http4sVersion,
+      "org.typelevel" %%% "case-insensitive" % caseInsensitiveVersion,
+      "org.typelevel" %%% "cats-core" % catsVersion,
+      "org.typelevel" %%% "cats-effect-kernel" % catsEffectVersion,
+      "org.typelevel" %%% "cats-effect-testkit" % catsEffectVersion % Test,
+      "org.typelevel" %%% "cats-effect" % catsEffectVersion,
+      "org.typelevel" %%% "cats-parse" % catsParseVersion,
+      "org.typelevel" %%% "munit-cats-effect" % munitCatsEffectVersion % Test,
+      "org.typelevel" %%% "scalacheck-effect-munit" % scalaCheckEffectMunitVersion % Test
     )
   )
