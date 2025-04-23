@@ -57,7 +57,7 @@ inThisBuild(
 lazy val root = tlCrossRootProject
   .aggregate(core)
 
-lazy val core = crossProject(JVMPlatform)
+lazy val core = crossProject(JVMPlatform, JSPlatform)
   .in(file("modules/core"))
   .settings(
     name := "http4s-aws",
@@ -77,4 +77,8 @@ lazy val core = crossProject(JVMPlatform)
       "org.typelevel" %%% "munit-cats-effect" % munitCatsEffectVersion % Test,
       "org.typelevel" %%% "scalacheck-effect-munit" % scalaCheckEffectMunitVersion % Test
     )
+  )
+  .jsSettings(
+    tlVersionIntroduced := List("2.13", "3").map(_ -> "6.2.0").toMap,
+    Test / scalaJSLinkerConfig ~= (_.withModuleKind(ModuleKind.CommonJSModule))
   )
