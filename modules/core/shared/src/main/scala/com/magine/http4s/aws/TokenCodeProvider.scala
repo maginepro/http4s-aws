@@ -49,18 +49,26 @@ object TokenCodeProvider {
       private def prompt(mfaSerial: MfaSerial): F[Unit] =
         console.print(s"Enter MFA code for ${mfaSerial.value}: ")
 
-      private val readTokenCode: F[TokenCode] =
-        stdinUtf8[F](32)
+      private val invalidTokenCode: F[Unit] =
+        console.println("Invalid MFA code, must be 6 digits.\n")
+
+      private def readTokenCode(mfaSerial: MfaSerial): F[TokenCode] =
+        stdinUtf8[F](1024)
           .through(text.lines)
           .map(_.trim)
-          .map(TokenCode(_).toRight(InvalidTokenCode()))
-          .rethrow
+          .map(TokenCode(_))
+          .evalTap {
+            case Some(_) => Async[F].unit
+            case None => invalidTokenCode >> prompt(mfaSerial)
+          }
+          .unNone
           .take(1)
           .compile
           .onlyOrError
+          .adaptErr { case _: NoSuchElementException => unexpectedEndOfStdin }
 
       override def tokenCode(mfaSerial: MfaSerial): F[TokenCode] =
-        prompt(mfaSerial) >> readTokenCode
+        prompt(mfaSerial) >> readTokenCode(mfaSerial)
     }
 
   /**
@@ -86,7 +94,7 @@ object TokenCodeProvider {
           }
           .flatMap {
             case Some(input) => TokenCode(input).pure[F]
-            case None => unexpectedEndOfInput.raiseError[F, Option[TokenCode]]
+            case None => unexpectedEndOfStdin.raiseError[F, Option[TokenCode]]
           }
           .flatMap {
             case Some(tokenCode) =>
@@ -95,9 +103,6 @@ object TokenCodeProvider {
               Sync[F].blocking(println("\nInvalid MFA code, must be 6 digits.")) >>
                 tokenCode(mfaSerial)
           }
-
-      private def unexpectedEndOfInput: Throwable =
-        new RuntimeException("Unexpected end of input")
     }
 
   /**
@@ -111,4 +116,7 @@ object TokenCodeProvider {
         result
     }
   }
+
+  private def unexpectedEndOfStdin: Throwable =
+    new NoSuchElementException("Unexpected end of stdin")
 }
