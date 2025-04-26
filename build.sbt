@@ -80,5 +80,5 @@ lazy val core = crossProject(JVMPlatform, JSPlatform)
   )
   .jsSettings(
     tlVersionIntroduced := List("2.13", "3").map(_ -> "6.2.0").toMap,
-    Test / scalaJSLinkerConfig ~= (_.withModuleKind(ModuleKind.CommonJSModule))
+    scalaJSLinkerConfig ~= (_.withModuleKind(ModuleKind.CommonJSModule))
   )
