@@ -49,7 +49,6 @@ inThisBuild(
     tlCiScalafmtCheck := true,
     tlFatalWarnings := true,
     tlJdkRelease := Some(8),
-    tlUntaggedAreSnapshots := false,
     versionScheme := Some("early-semver")
   )
 )
