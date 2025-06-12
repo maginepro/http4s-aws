@@ -19,8 +19,6 @@ package com.magine.http4s.aws.headers
 import cats.ApplicativeThrow
 import cats.effect.Concurrent
 import cats.syntax.all.*
-import fs2.Chunk
-import fs2.Stream
 import fs2.hashing.HashAlgorithm
 import fs2.hashing.Hashing
 import fs2.text.hex
@@ -32,6 +30,9 @@ import org.typelevel.ci.*
 final case class `X-Amz-Content-SHA256`(value: String)
 
 object `X-Amz-Content-SHA256` {
+  val `STREAMING-AWS4-HMAC-SHA256-PAYLOAD`: `X-Amz-Content-SHA256` =
+    apply("STREAMING-AWS4-HMAC-SHA256-PAYLOAD")
+
   def get[F[_]](request: Request[F]): Option[`X-Amz-Content-SHA256`] =
     request.headers.get[`X-Amz-Content-SHA256`]
 
@@ -44,7 +45,10 @@ object `X-Amz-Content-SHA256` {
     Right(apply(s))
 
   def put[F[_]: Concurrent: Hashing](request: Request[F]): F[Request[F]] =
-    unChunk(request).flatMap(request => bodyHash(request).map(request.putHeaders(_)))
+    if (request.isChunked)
+      request.putHeaders(`STREAMING-AWS4-HMAC-SHA256-PAYLOAD`).pure
+    else
+      bodyHash(request).map(request.putHeaders(_))
 
   def putIfAbsent[F[_]: Concurrent: Hashing](request: Request[F]): F[Request[F]] =
     if (request.headers.contains[`X-Amz-Content-SHA256`]) request.pure else put(request)
@@ -58,12 +62,6 @@ object `X-Amz-Content-SHA256` {
       .compile
       .lastOrError
       .map(apply)
-
-  private def unChunk[F[_]: Concurrent](request: Request[F]): F[Request[F]] =
-    if (request.isChunked) {
-      val unChunked = request.body.compile.to(Chunk)
-      unChunked.map(Stream.chunk).map(request.withBodyStream)
-    } else request.pure
 
   implicit val headerInstance: Header[`X-Amz-Content-SHA256`, Header.Single] =
     Header.createRendered(ci"X-Amz-Content-SHA256", _.value, parse)
