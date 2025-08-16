@@ -50,6 +50,8 @@ import org.http4s.Uri
 import org.http4s.client.Client
 import scala.annotation.nowarn
 import scala.concurrent.duration.*
+import org.http4s.Header
+import org.typelevel.ci._
 
 /**
   * Capability to return [[Credentials]] from one or multiple sources.
@@ -154,11 +156,33 @@ object CredentialsProvider {
         }
       } yield uri
 
+    def readTokenFile: F[Option[Header.Raw]] = {
+      def readFile(path: Path): F[String] =
+        Files
+          .forAsync[F]
+          .readAll(path)
+          .through(utf8.decode)
+          .compile
+          .string
+          .adaptError { case _: NoSuchFileException => MissingCredentials() }
+
+      ContainerAuthorizationTokenFile[F].read.flatMap {
+        case Some(path) =>
+          for {
+            s <- readFile(path)
+          } yield Some(Header.Raw(ci"Authorization", s))
+        case None => Async[F].pure(None)
+      }
+    }
+
     def requestCredentials: F[ExpiringCredentials] =
       for {
         uri <- credentialsUri
-        authorization <- ContainerAuthorizationToken[F].read
-        request = Request[F](Method.GET, uri).withHeaders(authorization.toList)
+        authorizationFromHeader <- ContainerAuthorizationToken[F].read
+        authorizationFromFile <- readTokenFile
+        request = Request[F](Method.GET, uri).withHeaders(
+          authorizationFromHeader.orElse(authorizationFromFile).toList
+        )
         expiring <- client.expect[ExpiringCredentials](request)
       } yield expiring
 

@@ -119,6 +119,15 @@ private[aws] object Setting {
         Header.Raw(ci"Authorization", value).pure
     }
 
+  def ContainerAuthorizationTokenFile[F[_]: Async]: Setting[F, Path] =
+    new Setting.Standard[F, Path](
+      envName = "AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE",
+      propName = "aws.containerAuthorizationTokenFile",
+    ) {
+      override def parse(value: String): F[Path] =
+        Path(value).pure
+    }
+
   def ContainerCredentialsRelativeUri[F[_]: Sync]: Setting[F, String] =
     new Setting.Standard[F, String](
       envName = "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI",
