@@ -119,7 +119,7 @@ private[aws] object Setting {
         Header.Raw(ci"Authorization", value).pure
     }
 
-  def ContainerAuthorizationTokenFile[F[_]: Async]: Setting[F, Path] =
+  def ContainerAuthorizationTokenFile[F[_]: Sync]: Setting[F, Path] =
     new Setting.Standard[F, Path](
       envName = "AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE",
       propName = "aws.containerAuthorizationTokenFile",

@@ -104,9 +104,15 @@ object CredentialsProvider {
     *   or the `AWS_CONTAINER_CREDENTIALS_FULL_URI` environment variable,
     *   to get the full URI.
     *
-    * If the `aws.containerAuthorizationToken` system property, or the
-    * `AWS_CONTAINER_AUTHORIZATION_TOKEN` environment variable is set,
-    * the contents will be passed as the value of the `Authorization`
+    * If the `aws.containerAuthorizationTokenFile` system property, or
+    * the `AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE` environment variable
+    * is set, the contents of the specified file (with both leading and
+    * trailing whitespace removed) will be used for the `Authorization`
+    * header when querying the endpoint.
+    *
+    * If the above two are not set, but the `aws.containerAuthorizationToken`
+    * system property, or the `AWS_CONTAINER_AUTHORIZATION_TOKEN` environment
+    * variable is set, the contents will be used for the `Authorization`
     * header when querying the endpoint.
     *
     * GET requests will be issued to the endpoint and the endpoint is
@@ -156,35 +162,24 @@ object CredentialsProvider {
         }
       } yield uri
 
-    def readTokenFile: F[Option[Header.Raw]] = {
-      def readFile(path: Path): F[String] =
-        Files
-          .forAsync[F]
-          .readAll(path)
-          .through(utf8.decode)
-          .compile
-          .string
-          .adaptError { case _: NoSuchFileException => MissingCredentials() }
-
-      ContainerAuthorizationTokenFile[F].read
-        .flatMap[Option[Header.Raw]] {
-          case Some(path) =>
-            for {
-              s <- readFile(path)
-            } yield Some(Header.Raw(ci"Authorization", s.trim))
-          case None => none[Header.Raw].pure[F]
-        }
-        .recover { case _ => none[Header.Raw] }
-    }
+    def readContainerAuthorizationTokenFile(path: Path): F[Header.Raw] =
+      Files
+        .forAsync[F]
+        .readAll(path)
+        .through(utf8.decode)
+        .compile
+        .string
+        .map(_.trim)
+        .map(Header.Raw(ci"Authorization", _))
 
     def requestCredentials: F[ExpiringCredentials] =
       for {
         uri <- credentialsUri
-        authorizationFromHeader <- ContainerAuthorizationToken[F].read
-        authorizationFromFile <- readTokenFile
-        request = Request[F](Method.GET, uri).withHeaders(
-          authorizationFromHeader.orElse(authorizationFromFile).toList
-        )
+        authorizationTokenFile <- ContainerAuthorizationTokenFile[F].read
+          .flatMap(_.traverse(readContainerAuthorizationTokenFile))
+        authorizationToken = ContainerAuthorizationToken[F].read
+        authorization <- authorizationTokenFile.map(_.some.pure).getOrElse(authorizationToken)
+        request = Request[F](Method.GET, uri).withHeaders(authorization)
         expiring <- client.expect[ExpiringCredentials](request)
       } yield expiring
 
