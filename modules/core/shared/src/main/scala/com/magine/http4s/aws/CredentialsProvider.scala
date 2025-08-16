@@ -104,16 +104,16 @@ object CredentialsProvider {
     *   or the `AWS_CONTAINER_CREDENTIALS_FULL_URI` environment variable,
     *   to get the full URI.
     *
-    * If the `aws.containerAuthorizationToken` system property, or the
-    * `AWS_CONTAINER_AUTHORIZATION_TOKEN` environment variable is set,
-    * the contents will be passed as the value of the `Authorization`
+    * If the `aws.containerAuthorizationTokenFile` system property, or
+    * the `AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE` environment variable
+    * is set, the contents of the specified file (with both leading and
+    * trailing whitespace removed) will be used for the `Authorization`
     * header when querying the endpoint.
     *
-    * If neither are set, but the `aws.containerAuthorizationTokenFile`
-    * system property, or the `AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE`
-    * environment variable is set, the contents of the specified file
-    * (with leading and trailing whitespace removed) will be used for
-    * the `Authorization` header when querying the endpoint.
+    * If the above two are not set, but the `aws.containerAuthorizationToken`
+    * system property, or the `AWS_CONTAINER_AUTHORIZATION_TOKEN` environment
+    * variable is set, the contents will be used for the `Authorization`
+    * header when querying the endpoint.
     *
     * GET requests will be issued to the endpoint and the endpoint is
     * expected to return JSON data in the following format.
@@ -175,10 +175,10 @@ object CredentialsProvider {
     def requestCredentials: F[ExpiringCredentials] =
       for {
         uri <- credentialsUri
-        authorizationToken <- ContainerAuthorizationToken[F].read
-        authorizationTokenFile = ContainerAuthorizationTokenFile[F].read
+        authorizationTokenFile <- ContainerAuthorizationTokenFile[F].read
           .flatMap(_.traverse(readContainerAuthorizationTokenFile))
-        authorization <- authorizationToken.map(_.some.pure).getOrElse(authorizationTokenFile)
+        authorizationToken = ContainerAuthorizationToken[F].read
+        authorization <- authorizationTokenFile.map(_.some.pure).getOrElse(authorizationToken)
         request = Request[F](Method.GET, uri).withHeaders(authorization)
         expiring <- client.expect[ExpiringCredentials](request)
       } yield expiring
