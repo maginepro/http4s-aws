@@ -156,35 +156,24 @@ object CredentialsProvider {
         }
       } yield uri
 
-    def readTokenFile: F[Option[Header.Raw]] = {
-      def readFile(path: Path): F[String] =
-        Files
-          .forAsync[F]
-          .readAll(path)
-          .through(utf8.decode)
-          .compile
-          .string
-          .adaptError { case _: NoSuchFileException => MissingCredentials() }
-
-      ContainerAuthorizationTokenFile[F].read
-        .flatMap[Option[Header.Raw]] {
-          case Some(path) =>
-            for {
-              s <- readFile(path)
-            } yield Some(Header.Raw(ci"Authorization", s.trim))
-          case None => none[Header.Raw].pure[F]
-        }
-        .recover { case _ => none[Header.Raw] }
-    }
+    def readContainerAuthorizationTokenFile(path: Path): F[Header.Raw] =
+      Files
+        .forAsync[F]
+        .readAll(path)
+        .through(utf8.decode)
+        .compile
+        .string
+        .map(_.trim)
+        .map(Header.Raw(ci"Authorization", _))
 
     def requestCredentials: F[ExpiringCredentials] =
       for {
         uri <- credentialsUri
-        authorizationFromHeader <- ContainerAuthorizationToken[F].read
-        authorizationFromFile <- readTokenFile
-        request = Request[F](Method.GET, uri).withHeaders(
-          authorizationFromHeader.orElse(authorizationFromFile).toList
-        )
+        authorizationToken <- ContainerAuthorizationToken[F].read
+        authorizationTokenFile = ContainerAuthorizationTokenFile[F].read
+          .flatMap(_.traverse(readContainerAuthorizationTokenFile))
+        authorization <- authorizationToken.map(_.some.pure).getOrElse(authorizationTokenFile)
+        request = Request[F](Method.GET, uri).withHeaders(authorization)
         expiring <- client.expect[ExpiringCredentials](request)
       } yield expiring
 
