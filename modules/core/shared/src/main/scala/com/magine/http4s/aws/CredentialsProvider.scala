@@ -109,6 +109,12 @@ object CredentialsProvider {
     * the contents will be passed as the value of the `Authorization`
     * header when querying the endpoint.
     *
+    * If neither are set, but the `aws.containerAuthorizationTokenFile`
+    * system property, or the `AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE`
+    * environment variable is set, the contents of the specified file
+    * (with leading and trailing whitespace removed) will be used for
+    * the `Authorization` header when querying the endpoint.
+    *
     * GET requests will be issued to the endpoint and the endpoint is
     * expected to return JSON data in the following format.
     *
