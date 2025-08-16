@@ -167,14 +167,14 @@ object CredentialsProvider {
           .adaptError { case _: NoSuchFileException => MissingCredentials() }
 
       ContainerAuthorizationTokenFile[F].read
-        .flatMap {
+        .flatMap[Option[Header.Raw]] {
           case Some(path) =>
             for {
               s <- readFile(path)
             } yield Some(Header.Raw(ci"Authorization", s))
-          case None => None.pure[F]
+          case None => none[Header.Raw].pure[F]
         }
-        .recover { case _ => None }
+        .recover { case _ => none[Header.Raw] }
     }
 
     def requestCredentials: F[ExpiringCredentials] =
