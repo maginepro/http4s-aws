@@ -171,7 +171,7 @@ object CredentialsProvider {
           case Some(path) =>
             for {
               s <- readFile(path)
-            } yield Some(Header.Raw(ci"Authorization", s))
+            } yield Some(Header.Raw(ci"Authorization", s.trim))
           case None => none[Header.Raw].pure[F]
         }
         .recover { case _ => none[Header.Raw] }
