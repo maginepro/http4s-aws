@@ -44,14 +44,14 @@ import fs2.text.utf8
 import java.nio.charset.StandardCharsets.UTF_8
 import java.time.Instant
 import java.time.temporal.ChronoUnit
+import org.http4s.Header
 import org.http4s.Method
 import org.http4s.Request
 import org.http4s.Uri
 import org.http4s.client.Client
+import org.typelevel.ci.*
 import scala.annotation.nowarn
 import scala.concurrent.duration.*
-import org.http4s.Header
-import org.typelevel.ci._
 
 /**
   * Capability to return [[Credentials]] from one or multiple sources.
