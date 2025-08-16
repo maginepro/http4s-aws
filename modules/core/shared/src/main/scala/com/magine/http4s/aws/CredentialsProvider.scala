@@ -44,10 +44,12 @@ import fs2.text.utf8
 import java.nio.charset.StandardCharsets.UTF_8
 import java.time.Instant
 import java.time.temporal.ChronoUnit
+import org.http4s.Header
 import org.http4s.Method
 import org.http4s.Request
 import org.http4s.Uri
 import org.http4s.client.Client
+import org.typelevel.ci.*
 import scala.annotation.nowarn
 import scala.concurrent.duration.*
 
@@ -154,11 +156,35 @@ object CredentialsProvider {
         }
       } yield uri
 
+    def readTokenFile: F[Option[Header.Raw]] = {
+      def readFile(path: Path): F[String] =
+        Files
+          .forAsync[F]
+          .readAll(path)
+          .through(utf8.decode)
+          .compile
+          .string
+          .adaptError { case _: NoSuchFileException => MissingCredentials() }
+
+      ContainerAuthorizationTokenFile[F].read
+        .flatMap[Option[Header.Raw]] {
+          case Some(path) =>
+            for {
+              s <- readFile(path)
+            } yield Some(Header.Raw(ci"Authorization", s.trim))
+          case None => none[Header.Raw].pure[F]
+        }
+        .recover { case _ => none[Header.Raw] }
+    }
+
     def requestCredentials: F[ExpiringCredentials] =
       for {
         uri <- credentialsUri
-        authorization <- ContainerAuthorizationToken[F].read
-        request = Request[F](Method.GET, uri).withHeaders(authorization.toList)
+        authorizationFromHeader <- ContainerAuthorizationToken[F].read
+        authorizationFromFile <- readTokenFile
+        request = Request[F](Method.GET, uri).withHeaders(
+          authorizationFromHeader.orElse(authorizationFromFile).toList
+        )
         expiring <- client.expect[ExpiringCredentials](request)
       } yield expiring
 
