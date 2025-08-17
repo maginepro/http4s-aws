@@ -65,9 +65,10 @@ import scala.concurrent.duration.*
   *   (STS) using `CredentialsProvider.securityTokenService`.
   * - When using long-term credentials stored in `~/.aws/credentials`,
   *   one can use `CredentialsProvider.credentialsFile` to read those.
-  * - When running a service in Elastic Container Service (ECS) or on
-  *   Fargate, credentials are provided by a container endpoint, which
-  *   can be read by [[CredentialsProvider.containerEndpoint]].
+  * - When running a service on Elastic Container Service (ECS), or on
+  *   Elastic Kubernetes Service (EKS), or serverless on Fargate, one
+  *   can use [[CredentialsProvider.containerEndpoint]] to retrieve
+  *   credentials from a container endpoint.
   *
   * In most cases, [[CredentialsProvider.default]] will be the right
   * choice, unless there's a reason to exclude particular credential
