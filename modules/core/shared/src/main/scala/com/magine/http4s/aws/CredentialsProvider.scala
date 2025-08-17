@@ -178,8 +178,9 @@ object CredentialsProvider {
         uri <- credentialsUri
         authorizationTokenFile <- ContainerAuthorizationTokenFile[F].read
           .flatMap(_.traverse(readContainerAuthorizationTokenFile))
+          .map(_.map(_.some.pure))
         authorizationToken = ContainerAuthorizationToken[F].read
-        authorization <- authorizationTokenFile.map(_.some.pure).getOrElse(authorizationToken)
+        authorization <- authorizationTokenFile.getOrElse(authorizationToken)
         request = Request[F](Method.GET, uri).withHeaders(authorization)
         expiring <- client.expect[ExpiringCredentials](request)
       } yield expiring
