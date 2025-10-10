@@ -173,7 +173,7 @@ object CredentialsProvider {
         .map(_.trim)
         .map(Header.Raw(ci"Authorization", _))
 
-    def requestCredentials: F[ExpiringCredentials] =
+    def requestCredentials(retryAttempts: Int = 0, maxRetries: Int = 5): F[ExpiringCredentials] =
       for {
         uri <- credentialsUri
         authorizationTokenFile <- ContainerAuthorizationTokenFile[F].read
@@ -182,7 +182,10 @@ object CredentialsProvider {
         authorizationToken = ContainerAuthorizationToken[F].read
         authorization <- authorizationTokenFile.getOrElse(authorizationToken)
         request = Request[F](Method.GET, uri).withHeaders(authorization)
-        expiring <- client.expect[ExpiringCredentials](request)
+        expiring <- client.expect[ExpiringCredentials](request).recoverWith {
+          case _ if retryAttempts < maxRetries =>
+            requestCredentials(retryAttempts + 1)
+        }
       } yield expiring
 
     def sleepUntilRefresh(ref: Ref[F, Either[Throwable, ExpiringCredentials]]): F[Unit] =
@@ -200,7 +203,7 @@ object CredentialsProvider {
     def refreshCredentials(ref: Ref[F, Either[Throwable, ExpiringCredentials]]): F[Unit] =
       for {
         _ <- sleepUntilRefresh(ref)
-        credentials <- requestCredentials.attempt
+        credentials <- requestCredentials().attempt
         now <- Async[F].realTime.map(d => Instant.EPOCH.plusNanos(d.toNanos))
         _ <- ref.update {
           case right @ Right(existing) if credentials.isLeft && existing.isFresh(now) => right
@@ -209,7 +212,7 @@ object CredentialsProvider {
       } yield ()
 
     for {
-      credentials <- requestCredentials.attempt.toResource
+      credentials <- requestCredentials().attempt.toResource
       ref <- Ref[F].of(credentials).toResource
       _ <- refreshCredentials(ref).foreverM[Unit].background
     } yield new CredentialsProvider[F] {
