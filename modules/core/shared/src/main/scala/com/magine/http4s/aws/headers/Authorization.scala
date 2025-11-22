@@ -36,7 +36,7 @@ private[aws] object Authorization {
     request.putHeaders(
       Header.Raw(
         ci"Authorization",
-        show"AWS4-HMAC-SHA256 Credential=${accessKeyId.value}/${credentialScope.value}, SignedHeaders=${canonicalRequest.signedHeaders}, Signature=${signature.value}"
+        show"AWS4-HMAC-SHA256 Credential=${accessKeyId.value}/${credentialScope.value},SignedHeaders=${canonicalRequest.signedHeaders},Signature=${signature.value}"
       )
     )
 
