@@ -112,9 +112,8 @@ object AwsSigning {
     * The specified request should have required headers, as
     * added by [[prepareRequest]].
     *
-    * If the request has the `X-Amz-Decoded-Content-Length`
-    * header set, chunks will be signed. If the header is
-    * not set, chunks will be left unsigned.
+    * If the request is set to use chunked upload, the chunks
+    * will also be signed.
     */
   def signRequest[F[_]: Hashing: MonadCancelThrow](
     request: Request[F],
@@ -173,8 +172,13 @@ object AwsSigning {
     requestDateTime: RequestDateTime,
     seedSignature: Signature,
     signingKey: Chunk[Byte]
-  ): Request[F] =
-    if (request.headers.contains[`X-Amz-Decoded-Content-Length`])
+  ): Request[F] = {
+    val signChunks =
+      request.headers
+        .get[`X-Amz-Content-SHA256`]
+        .contains(`X-Amz-Content-SHA256`.`STREAMING-AWS4-HMAC-SHA256-PAYLOAD`)
+
+    if (signChunks)
       request
         .withBodyStream(
           request.body
@@ -200,6 +204,7 @@ object AwsSigning {
             .unchunks
         )
     else request
+  }
 
   /* TODO: Remove for 7.0 release. */
   private[aws] def signRequest[F[_]: ApplicativeThrow](
