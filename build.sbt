@@ -34,7 +34,9 @@ inThisBuild(
       ProblemFilters.exclude[DirectMissingMethodProblem]("com.magine.http4s.aws.AwsPresigning.apply"),
       ProblemFilters.exclude[DirectMissingMethodProblem]("com.magine.http4s.aws.AwsSigning.signRequest"),
       ProblemFilters.exclude[IncompatibleMethTypeProblem]("com.magine.http4s.aws.CredentialsProvider.credentialsFile"),
-      ProblemFilters.exclude[IncompatibleMethTypeProblem]("com.magine.http4s.aws.TokenCodeProvider.default")
+      ProblemFilters.exclude[IncompatibleMethTypeProblem]("com.magine.http4s.aws.TokenCodeProvider.default"),
+      ProblemFilters.exclude[DirectMissingMethodProblem]("com.magine.http4s.aws.headers.Content-Encoding.aws-chunked"),
+      ProblemFilters.exclude[DirectMissingMethodProblem]("com.magine.http4s.aws.headers.Content-Encoding.putIfChunked"),
       // format: on
     ),
     organization := "com.magine",

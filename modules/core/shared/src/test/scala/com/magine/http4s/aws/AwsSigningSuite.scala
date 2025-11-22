@@ -21,7 +21,6 @@ import cats.syntax.all.*
 import com.magine.aws.Region
 import com.magine.http4s.aws.Credentials.AccessKeyId
 import com.magine.http4s.aws.Credentials.SecretAccessKey
-import com.magine.http4s.aws.headers.`Content-Encoding`
 import com.magine.http4s.aws.headers.`X-Amz-Content-SHA256`
 import com.magine.http4s.aws.headers.`X-Amz-Date`
 import com.magine.http4s.aws.headers.`X-Amz-Decoded-Content-Length`
@@ -31,9 +30,11 @@ import fs2.Stream
 import fs2.text.utf8
 import java.time.Instant
 import munit.CatsEffectSuite
+import org.http4s.ContentCoding
 import org.http4s.Method
 import org.http4s.Request
 import org.http4s.headers.Host
+import org.http4s.headers.`Content-Encoding`
 import org.http4s.headers.`Content-Length`
 import org.http4s.syntax.all.*
 import org.typelevel.ci.*
@@ -51,7 +52,7 @@ final class AwsSigningSuite extends CatsEffectSuite {
         Method.PUT,
         uri"https://s3.amazonaws.com/examplebucket/chunkObject.txt"
       ).withHeaders(
-        `Content-Encoding`.`aws-chunked`,
+        `Content-Encoding`(ContentCoding.unsafeFromString("aws-chunked")),
         `Content-Length`(66824),
         Host("s3.amazonaws.com"),
         `X-Amz-Content-SHA256`.`STREAMING-AWS4-HMAC-SHA256-PAYLOAD`,
