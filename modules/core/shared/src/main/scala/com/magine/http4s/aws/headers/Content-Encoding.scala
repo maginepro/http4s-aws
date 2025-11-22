@@ -28,4 +28,7 @@ private[aws] object `Content-Encoding` {
 
   def putIfChunked[F[_]](request: Request[F]): Request[F] =
     if (request.isChunked) request.putHeaders(`aws-chunked`) else request
+
+  def putIfAbsentAndChunked[F[_]](request: Request[F]): Request[F] =
+    if (request.headers.contains[`Content-Encoding`]) request else putIfChunked(request)
 }
