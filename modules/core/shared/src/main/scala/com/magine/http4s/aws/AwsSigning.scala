@@ -93,7 +93,7 @@ object AwsSigning {
       .flatMap(`X-Amz-Content-SHA256`.putIfAbsent[F])
       .flatMap(`X-Amz-Date`.putIfAbsent[F])
       .map(`X-Amz-Security-Token`.putIfAbsent[F](sessionToken))
-      .map(`Content-Encoding`.putIfChunked[F])
+      .map(`Content-Encoding`.putIfAbsentAndChunked[F])
 
   /**
     * Returns a signed request by adding an `Authorization`
