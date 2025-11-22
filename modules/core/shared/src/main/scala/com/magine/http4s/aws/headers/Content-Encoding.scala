@@ -16,16 +16,16 @@
 
 package com.magine.http4s.aws.headers
 
+import org.http4s.ContentCoding
 import org.http4s.Header
 import org.http4s.Request
-import org.typelevel.ci.*
 
 private[aws] object `Content-Encoding` {
-  private val `aws-chunked`: String =
-    "aws-chunked"
+  private type `Content-Encoding` = org.http4s.headers.`Content-Encoding`
+  private val `Content-Encoding` = org.http4s.headers.`Content-Encoding`
 
-  private val `Content-Encoding`: CIString =
-    ci"Content-Encoding"
+  val `aws-chunked`: `Content-Encoding` =
+    `Content-Encoding`(ContentCoding.unsafeFromString("aws-chunked"))
 
   /**
     * The http4s `Content-Encoding` header type currently only allows
@@ -35,21 +35,25 @@ private[aws] object `Content-Encoding` {
     * logic requires `aws-chunked`, while supporting an additional
     * encoding, such that e.g. `aws-chunked,gzip` is supported.
     *
-    * The logic here crudely parses `Content-Encoding` and appends
+    * The logic here crudely parses `Content-Encoding` and prepends
     * `aws-chunked` if it's not already present for chunked requests.
     */
-  def putIfAbsentAndChunked[F[_]](request: Request[F]): Request[F] =
+  def putIfChunked[F[_]](request: Request[F]): Request[F] =
     if (request.isChunked) {
-      val encodings = request.headers
-        .get(`Content-Encoding`)
-        .toList
-        .flatMap(_.toList.map(_.value))
-        .flatMap(_.split(',').map(_.trim).toList)
+      val headerName = Header[`Content-Encoding`].name
+      val encoding = `aws-chunked`.contentCoding.coding
 
-      if (encodings.contains(`aws-chunked`)) request
+      val encodings =
+        request.headers
+          .get(headerName)
+          .toList
+          .flatMap(_.toList.map(_.value))
+          .flatMap(_.split(',').map(_.trim).toList)
+
+      if (encodings.contains(encoding)) request
       else {
-        val value = encodings.prepended(`aws-chunked`).mkString(",")
-        request.putHeaders(Header.Raw(`Content-Encoding`, value))
+        val value = encodings.prepended(encoding).mkString(",")
+        request.putHeaders(Header.Raw(headerName, value))
       }
     } else request
 }

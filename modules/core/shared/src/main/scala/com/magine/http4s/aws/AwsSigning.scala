@@ -90,7 +90,7 @@ object AwsSigning {
     * If the request has `Transfer-Encoding: chunked` set,
     * so `Request#isChunked` returns `true`, it is also
     * required to set the `X-Amz-Decoded-Content-Length`
-    * header , or a [[MissingContentLength]] exception
+    * header, or a [[MissingContentLength]] exception
     * will be raised.
     */
   def prepareRequest[F[_]: Hashing: Temporal](
@@ -102,7 +102,7 @@ object AwsSigning {
       .flatMap(`X-Amz-Content-SHA256`.putIfAbsent[F])
       .flatMap(`X-Amz-Date`.putIfAbsent[F])
       .map(`X-Amz-Security-Token`.putIfAbsent[F](sessionToken))
-      .map(`Content-Encoding`.putIfAbsentAndChunked[F])
+      .map(`Content-Encoding`.putIfChunked[F])
       .flatTap(`X-Amz-Decoded-Content-Length`.ensureSet[F])
 
   /**
