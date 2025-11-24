@@ -24,7 +24,10 @@ import cats.syntax.all.*
 import com.magine.aws.Region
 import com.magine.http4s.aws.headers.*
 import com.magine.http4s.aws.internal.*
+import fs2.Chunk
+import fs2.Stream
 import fs2.hashing.Hashing
+import java.nio.charset.StandardCharsets.UTF_8
 import org.http4s.Request
 
 trait AwsSigning[F[_]] {
@@ -83,6 +86,12 @@ object AwsSigning {
     *
     * The headers are required in order to be able to sign
     * requests with [[signRequest]].
+    *
+    * If the request has `Transfer-Encoding: chunked` set,
+    * so `Request#isChunked` returns `true`, it is also
+    * required to set the `X-Amz-Decoded-Content-Length`
+    * header, or a [[MissingContentLength]] exception
+    * will be raised.
     */
   def prepareRequest[F[_]: Hashing: Temporal](
     request: Request[F],
@@ -94,6 +103,7 @@ object AwsSigning {
       .flatMap(`X-Amz-Date`.putIfAbsent[F])
       .map(`X-Amz-Security-Token`.putIfAbsent[F](sessionToken))
       .map(`Content-Encoding`.putIfChunked[F])
+      .flatTap(`X-Amz-Decoded-Content-Length`.ensureSet[F])
 
   /**
     * Returns a signed request by adding an `Authorization`
@@ -101,6 +111,9 @@ object AwsSigning {
     *
     * The specified request should have required headers, as
     * added by [[prepareRequest]].
+    *
+    * If the request is set to use chunked upload, the chunks
+    * will also be signed.
     */
   def signRequest[F[_]: Hashing: MonadCancelThrow](
     request: Request[F],
@@ -126,7 +139,72 @@ object AwsSigning {
       signingContent <- Signature.signingContent(canonicalRequest, credentialScope, requestDateTime)
       signingKey <- Signature.signingKey(region, requestDateTime.date, secretAccessKey, serviceName)
       signature <- Signature.sign(signingKey, signingContent)
-    } yield Authorization.putIfAbsent(request, accessKeyId, canonicalRequest, credentialScope, signature)
+      signedRequest = Authorization.putIfAbsent(
+        request = request,
+        accessKeyId = accessKeyId,
+        canonicalRequest = canonicalRequest,
+        credentialScope = credentialScope,
+        signature = signature
+      )
+      signedRequestChunks = signRequestChunks(
+        request = signedRequest,
+        credentialScope = credentialScope,
+        requestDateTime = requestDateTime,
+        seedSignature = signature,
+        signingKey = signingKey,
+      )
+    } yield signedRequestChunks
+
+  /**
+    * The minimum supported chunk size is 8 KB (8000 bytes).
+    */
+  private val minChunkSize: Int = 8000
+
+  /**
+    * Trailing carriage return and new line for each chunk.
+    */
+  private val chunkTrailing: Chunk[Byte] =
+    Chunk.array("\r\n".getBytes(UTF_8))
+
+  private def signRequestChunks[F[_]: Hashing: MonadCancelThrow](
+    request: Request[F],
+    credentialScope: CredentialScope,
+    requestDateTime: RequestDateTime,
+    seedSignature: Signature,
+    signingKey: Chunk[Byte]
+  ): Request[F] = {
+    val signChunks =
+      request.headers
+        .get[`X-Amz-Content-SHA256`]
+        .contains(`X-Amz-Content-SHA256`.`STREAMING-AWS4-HMAC-SHA256-PAYLOAD`)
+
+    if (signChunks)
+      request
+        .withBodyStream(
+          request.body
+            .chunkMin(minChunkSize)
+            .append(Stream(Chunk.empty))
+            .evalMapAccumulate(seedSignature) { case (previousSignature, chunk) =>
+              for {
+                signingContent <- Signature.signingContentPayload[F](
+                  chunk = chunk,
+                  credentialScope = credentialScope,
+                  previousSignature = previousSignature,
+                  requestDateTime = requestDateTime
+                )
+                signature <- Signature.sign(signingKey, signingContent)
+                chunkSizeHex = Integer.toHexString(chunk.size)
+                chunkSignature = Chunk.array(
+                  s"$chunkSizeHex;chunk-signature=${signature.value}\r\n".getBytes(UTF_8)
+                )
+                signedChunk = chunkSignature ++ chunk ++ chunkTrailing
+              } yield (signature, signedChunk)
+            }
+            .map { case (_, signedChunk) => signedChunk }
+            .unchunks
+        )
+    else request
+  }
 
   /* TODO: Remove for 7.0 release. */
   private[aws] def signRequest[F[_]: ApplicativeThrow](

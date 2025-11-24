@@ -14,7 +14,7 @@ libraryDependencies += "com.magine" %% "http4s-aws" % http4sAwsVersion
 Make sure to replace `http4sAwsVersion` with a [release version](https://github.com/maginepro/http4s-aws/releases).<br>
 Replace `%%` with `%%%` if you are using [Scala.js](https://www.scala-js.org).
 
-## Quick Example
+## Signing
 
 Create a `CredentialsProvider` and use `AwsSigningClient` to wrap an existing client.
 
@@ -47,7 +47,13 @@ object Main extends IOApp.Simple {
 }
 ```
 
-If pre-signing of requests is necessary, instead use `AwsPresigning`.
+### Chunking
+
+For chunked uploads, set `Transfer-Encoding: chunked` and set the `X-Amz-Decoded-Content-Length` header to the total length of the request body. In this case, avoid setting the `Content-Length` header, since it will then also have to account for the signing content length.
+
+## Pre-signing
+
+If pre-signing of requests is necessary, use `AwsPresigning`.
 
 ```scala
 import cats.effect.IO

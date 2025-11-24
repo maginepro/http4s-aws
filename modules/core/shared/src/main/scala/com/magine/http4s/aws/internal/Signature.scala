@@ -48,6 +48,36 @@ private[aws] object Signature {
       )
     }
 
+  /**
+    * The SHA-256 hash in hex encoding for the empty `String`.
+    */
+  private val emptyHash: String =
+    "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+
+  /**
+    * Returns the SHA-256 hash in hex encoding for the specified bytes.
+    */
+  private def hash[F[_]: Hashing: MonadCancelThrow](chunk: Chunk[Byte]): F[String] =
+    Hashing[F].hasher(HashAlgorithm.SHA256).use { hasher =>
+      for {
+        _ <- hasher.update(chunk)
+        hash <- hasher.hash.map(_.bytes.toArray)
+      } yield Hex.encodeHex(hash)
+    }
+
+  def signingContentPayload[F[_]: Hashing: MonadCancelThrow](
+    chunk: Chunk[Byte],
+    credentialScope: CredentialScope,
+    previousSignature: Signature,
+    requestDateTime: RequestDateTime,
+  ): F[Chunk[Byte]] =
+    hash(chunk).map { chunkHash =>
+      Chunk.array(
+        show"AWS4-HMAC-SHA256-PAYLOAD\n${requestDateTime.value}\n${credentialScope.value}\n${previousSignature.value}\n$emptyHash\n$chunkHash"
+          .getBytes(UTF_8)
+      )
+    }
+
   def signingKey[F[_]: Hashing: MonadCancelThrow](
     region: Region,
     requestDate: RequestDate,

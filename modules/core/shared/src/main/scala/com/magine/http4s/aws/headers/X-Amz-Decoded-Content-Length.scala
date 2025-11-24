@@ -16,6 +16,8 @@
 
 package com.magine.http4s.aws.headers
 
+import cats.ApplicativeThrow
+import com.magine.http4s.aws.MissingContentLength
 import org.http4s.Header
 import org.http4s.ParseFailure
 import org.http4s.ParseResult
@@ -25,6 +27,11 @@ import org.typelevel.ci.*
 final case class `X-Amz-Decoded-Content-Length`(value: Long)
 
 object `X-Amz-Decoded-Content-Length` {
+  private[aws] def ensureSet[F[_]: ApplicativeThrow](request: Request[F]): F[Unit] =
+    if (request.isChunked && !request.headers.contains[`X-Amz-Decoded-Content-Length`])
+      ApplicativeThrow[F].raiseError(MissingContentLength())
+    else ApplicativeThrow[F].unit
+
   def get[F[_]](request: Request[F]): Option[`X-Amz-Decoded-Content-Length`] =
     request.headers.get[`X-Amz-Decoded-Content-Length`]
 
