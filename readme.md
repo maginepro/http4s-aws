@@ -5,10 +5,13 @@ The library is inspired by [filosganga/http4s-aws](https://github.com/filosganga
 
 ## Usage
 
-You can add the following line to `build.sbt` to use the library.
+You can add the following lines to `build.sbt` to use the library.
 
 ```scala
-libraryDependencies += "com.magine" %% "http4s-aws" % http4sAwsVersion
+libraryDependencies ++= Seq(
+  "com.magine" %% "http4s-aws" % http4sAwsVersion,
+  "com.magine" %% "http4s-aws-s3" % http4sAwsVersion
+)
 ```
 
 Make sure to replace `http4sAwsVersion` with a [release version](https://github.com/maginepro/http4s-aws/releases).<br>
@@ -85,6 +88,52 @@ object Main extends IOApp.Simple {
       .use(_.presign(request))
       .map(_.uri.renderString)
       .flatMap(IO.println)
+  }
+}
+```
+
+## S3
+
+The `http4s-aws-s3` module adds support for Amazon S3 [multipart uploads](https://docs.aws.amazon.com/AmazonS3/latest/userguide/mpuoverview.html).
+
+```scala
+import cats.effect.IO
+import cats.effect.IOApp
+import com.magine.aws.Region
+import com.magine.http4s.aws.CredentialsProvider
+import com.magine.http4s.aws.s3.S3MultipartUpload
+import com.magine.http4s.aws.s3.syntax.*
+import fs2.Stream
+import fs2.text
+import io.circe.Json
+import org.http4s.MediaType
+import org.http4s.ember.client.EmberClientBuilder
+import org.http4s.headers.`Content-Type`
+
+object Main extends IOApp.Simple {
+  def run: IO[Unit] = {
+    val multipartUpload =
+      for {
+        client <- EmberClientBuilder.default[IO].build
+        provider <- CredentialsProvider.default(client)
+        bucket = bucket"bucket"
+        key = key"key"
+        region = Region.EU_WEST_1
+        multipartUpload = S3MultipartUpload(client, provider, region)
+          .withContentType(`Content-Type`(MediaType.application.json))
+          .withMaxConcurrentUploads(5)
+          .uploadTo(bucket, key)
+      } yield multipartUpload
+
+    multipartUpload.use { multipartUpload =>
+      Stream(Json.obj())
+        .map(_.noSpaces)
+        .through(text.utf8.encode)
+        .through(multipartUpload)
+        .compile
+        .onlyOrError
+        .flatMap(IO.println)
+    }
   }
 }
 ```

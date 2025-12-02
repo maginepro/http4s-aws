@@ -167,8 +167,8 @@ private[aws] object AwsCredentialsCache {
       Hashing.forSync[F].hasher(HashAlgorithm.SHA1).use { hasher =>
         for {
           _ <- hasher.update(Chunk.array(s.getBytes(UTF_8)))
-          hash <- hasher.hash.map(_.bytes.toArray)
-        } yield Hex.encodeHex(hash)
+          hash <- hasher.hash.map(_.bytes.toByteVector.toHex)
+        } yield hash
       }
   }
 }

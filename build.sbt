@@ -6,8 +6,10 @@ val catsEffectVersion = "3.6.3"
 val catsParseVersion = "1.1.0"
 val catsVersion = "2.13.0"
 val circeVersion = "0.14.15"
+val fs2DataVersion = "1.12.0"
 val fs2Version = "3.12.2"
 val http4sVersion = "0.23.33"
+val literallyVersion = "1.2.0"
 val munitCatsEffectVersion = "2.1.0"
 val scala213Version = "2.13.18"
 val scala3Version = "3.3.7"
@@ -54,7 +56,7 @@ inThisBuild(
 )
 
 lazy val root = tlCrossRootProject
-  .aggregate(core)
+  .aggregate(core, s3)
 
 lazy val core = crossProject(JVMPlatform, JSPlatform)
   .in(file("modules/core"))
@@ -79,5 +81,20 @@ lazy val core = crossProject(JVMPlatform, JSPlatform)
   )
   .jsSettings(
     tlVersionIntroduced := List("2.13", "3").map(_ -> "6.2.0").toMap,
+    scalaJSLinkerConfig ~= (_.withModuleKind(ModuleKind.CommonJSModule))
+  )
+
+lazy val s3 = crossProject(JVMPlatform, JSPlatform)
+  .in(file("modules/s3"))
+  .dependsOn(core)
+  .settings(
+    name := "http4s-aws-s3",
+    libraryDependencies ++= Seq(
+      "org.gnieh" %%% "fs2-data-xml" % fs2DataVersion,
+      "org.typelevel" %%% "literally" % literallyVersion
+    ),
+    tlVersionIntroduced := List("2.13", "3").map(_ -> "6.2.3").toMap
+  )
+  .jsSettings(
     scalaJSLinkerConfig ~= (_.withModuleKind(ModuleKind.CommonJSModule))
   )

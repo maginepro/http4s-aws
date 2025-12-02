@@ -31,6 +31,7 @@ import java.security.MessageDigest
 import org.http4s.Header
 import org.http4s.Request
 import scala.util.matching.Regex
+import scodec.bits.ByteVector
 
 /**
   * Documentation: https://docs.aws.amazon.com/IAM/latest/UserGuide/create-signed-request.html
@@ -50,14 +51,14 @@ private[aws] final case class CanonicalRequest(
     Hashing[F].hasher(HashAlgorithm.SHA256).use { hasher =>
       for {
         _ <- hasher.update(Chunk.array(value.getBytes(UTF_8)))
-        hash <- hasher.hash.map(_.bytes.toArray)
-      } yield Hex.encodeHex(hash)
+        hash <- hasher.hash.map(_.bytes.toByteVector.toHex)
+      } yield hash
     }
 
   /* TODO: Remove for 7.0 release. */
   def valueHashLegacy: String = {
     val digest = MessageDigest.getInstance("SHA-256")
-    Hex.encodeHex(digest.digest(value.getBytes(UTF_8)))
+    ByteVector.view(digest.digest(value.getBytes(UTF_8))).toHex
   }
 }
 

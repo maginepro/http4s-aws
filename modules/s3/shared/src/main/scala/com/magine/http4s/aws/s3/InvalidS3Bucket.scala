@@ -14,22 +14,11 @@
  * limitations under the License.
  */
 
-package com.magine.http4s.aws.internal
+package com.magine.http4s.aws.s3
 
-private[aws] object Hex {
-  private val hex: Array[Char] =
-    "0123456789abcdef".toCharArray
+import scala.util.control.NoStackTrace
 
-  def encodeHex(bytes: Array[Byte]): String = {
-    val length = bytes.length
-    val out = new Array[Char](length * 2)
-    var i = 0
-    while (i < length) {
-      val b = bytes(i)
-      out(i * 2) = hex((0xf0 & b) >>> 4)
-      out(i * 2 + 1) = hex(0x0f & b)
-      i = i + 1
-    }
-    new String(out)
-  }
+final case class InvalidS3Bucket(name: String) extends RuntimeException with NoStackTrace {
+  override def getMessage: String =
+    s"Invalid S3Bucket: $name"
 }
