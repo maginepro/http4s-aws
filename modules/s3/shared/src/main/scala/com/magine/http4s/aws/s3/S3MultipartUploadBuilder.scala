@@ -87,6 +87,16 @@ sealed trait S3MultipartUploadBuilder[F[_]] {
   def withContentType(contentType: `Content-Type`): S3MultipartUploadBuilder[F]
 
   /**
+    * Sets the content type for the multipart upload
+    * to the specified one.
+    *
+    * If `None` is provided, no content type will be used.
+    *
+    * Default: `None`.
+    */
+  def withContentTypeOption(contentType: Option[`Content-Type`]): S3MultipartUploadBuilder[F]
+
+  /**
     * Returns the maximum number of concurrent part uploads.
     *
     * Default: `1`.
@@ -201,6 +211,9 @@ private[s3] object S3MultipartUploadBuilder {
   ) extends S3MultipartUploadBuilder[F] { builder =>
     override def withContentType(contentType: `Content-Type`): S3MultipartUploadBuilder[F] =
       copy(contentType = Some(contentType))
+
+    override def withContentTypeOption(contentType: Option[`Content-Type`]): S3MultipartUploadBuilder[F] =
+      copy(contentType = contentType)
 
     override def withMaxConcurrentUploads(maxConcurrentUploads: Int): S3MultipartUploadBuilder[F] =
       copy(maxConcurrentUploads = Math.max(1, maxConcurrentUploads))
