@@ -67,8 +67,8 @@ lazy val core = crossProject(JVMPlatform, JSPlatform)
   .settings(
     name := "http4s-aws",
     libraryDependencies ++= Seq(
-      "co.fs2" %%% "fs2-io" % fs2Version,
       "co.fs2" %%% "fs2-core" % fs2Version,
+      "co.fs2" %%% "fs2-io" % fs2Version,
       "com.magine" %%% "aws-regions" % awsRegionsVersion,
       "io.circe" %%% "circe-core" % circeVersion,
       "io.circe" %%% "circe-parser" % circeVersion,
@@ -76,7 +76,6 @@ lazy val core = crossProject(JVMPlatform, JSPlatform)
       "org.http4s" %%% "http4s-client" % http4sVersion,
       "org.http4s" %%% "http4s-core" % http4sVersion,
       "org.scodec" %%% "scodec-bits" % scodecVersion,
-      "org.typelevel" %%% "vault" % vaultVersion,
       "org.typelevel" %%% "case-insensitive" % caseInsensitiveVersion,
       "org.typelevel" %%% "cats-core" % catsVersion,
       "org.typelevel" %%% "cats-effect-kernel" % catsEffectVersion,
@@ -86,7 +85,8 @@ lazy val core = crossProject(JVMPlatform, JSPlatform)
       "org.typelevel" %%% "cats-kernel" % catsVersion,
       "org.typelevel" %%% "cats-parse" % catsParseVersion,
       "org.typelevel" %%% "munit-cats-effect" % munitCatsEffectVersion % Test,
-      "org.typelevel" %%% "scalacheck-effect-munit" % scalaCheckEffectMunitVersion % Test
+      "org.typelevel" %%% "scalacheck-effect-munit" % scalaCheckEffectMunitVersion % Test,
+      "org.typelevel" %%% "vault" % vaultVersion
     )
   )
   .jsSettings(
@@ -109,12 +109,14 @@ lazy val s3 = crossProject(JVMPlatform, JSPlatform)
       "org.http4s" %%% "http4s-client" % http4sVersion,
       "org.http4s" %%% "http4s-core" % http4sVersion,
       "org.scodec" %%% "scodec-bits" % scodecVersion,
-      "org.typelevel" %%% "vault" % vaultVersion,
       "org.typelevel" %%% "cats-core" % catsVersion,
       "org.typelevel" %%% "cats-effect-kernel" % catsEffectVersion,
       "org.typelevel" %%% "cats-effect" % catsEffectVersion,
       "org.typelevel" %%% "cats-kernel" % catsVersion,
-      "org.typelevel" %%% "literally" % literallyVersion
+      "org.typelevel" %%% "literally" % literallyVersion,
+      "org.typelevel" %%% "munit-cats-effect" % munitCatsEffectVersion % Test,
+      "org.typelevel" %%% "scalacheck-effect-munit" % scalaCheckEffectMunitVersion % Test,
+      "org.typelevel" %%% "vault" % vaultVersion
     ),
     tlVersionIntroduced := List("2.13", "3").map(_ -> "6.3.0").toMap
   )
