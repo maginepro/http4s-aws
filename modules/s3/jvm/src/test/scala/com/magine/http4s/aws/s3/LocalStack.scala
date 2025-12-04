@@ -17,6 +17,7 @@
 package com.magine.http4s.aws.s3
 
 import cats.effect.Temporal
+import cats.syntax.all.*
 import com.magine.aws.Region
 import com.magine.http4s.aws.AwsServiceName
 import com.magine.http4s.aws.AwsSigningClient
@@ -24,9 +25,11 @@ import com.magine.http4s.aws.CredentialsProvider
 import fs2.hashing.Hashing
 import org.http4s.Method
 import org.http4s.Request
+import org.http4s.Status.Successful
 import org.http4s.Uri
 import org.http4s.Uri.Path
 import org.http4s.client.Client
+import org.http4s.headers.`Content-Type`
 
 final case class LocalStack[F[_]: Hashing: Temporal](
   client: Client[F],
@@ -37,8 +40,22 @@ final case class LocalStack[F[_]: Hashing: Temporal](
   def createBucket(bucket: S3Bucket): F[Unit] =
     signingClient.expect[Unit](Request[F](Method.PUT, uri.withPath(Path.Root / bucket)))
 
-  def multipartUpload(bucket: S3Bucket, key: S3Key): S3MultipartUpload[F] =
-    S3MultipartUpload(client, provider, region).withUri(s3Uri).uploadTo(bucket, key)
+  def getContentType(bucket: S3Bucket, key: S3Key): F[Option[`Content-Type`]] =
+    signingClient
+      .run(Request[F](Method.GET, s3Uri(bucket, key, region)))
+      .use {
+        case Successful(response) =>
+          response.headers.get[`Content-Type`].pure[F]
+        case response =>
+          response.bodyText.compile.string.flatMap { bodyText =>
+            new RuntimeException(
+              s"Failed to get $key in $bucket: response status ${response.status.code}: $bodyText"
+            ).raiseError
+          }
+      }
+
+  def multipartUpload: S3MultipartUploadBuilder[F] =
+    S3MultipartUpload(client, provider, region).withUri(s3Uri)
 
   def s3Uri: S3Uri =
     S3Uri { case (bucket, key, _) =>

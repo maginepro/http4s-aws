@@ -13,6 +13,7 @@ val scala213Version = "2.13.18"
 val scala3Version = "3.3.7"
 val scalaCheckEffectMunitVersion = "2.1.0-RC1"
 val scodecVersion = "1.2.4"
+val slf4jVersion = "2.0.17"
 val testcontainersVersion = "2.0.2"
 val vaultVersion = "3.6.0"
 
@@ -126,6 +127,7 @@ lazy val s3 = crossProject(JVMPlatform, JSPlatform)
   .jvmSettings(
     Test / fork := true,
     libraryDependencies ++= Seq(
+      "org.slf4j" % "slf4j-nop" % slf4jVersion % Test,
       "org.testcontainers" % "testcontainers-localstack" % testcontainersVersion % Test
     )
   )

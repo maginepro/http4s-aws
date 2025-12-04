@@ -18,19 +18,34 @@ package com.magine.http4s.aws.s3
 
 import fs2.Chunk
 import fs2.Stream
+import org.http4s.Charset
+import org.http4s.MediaType
 import org.http4s.Uri.Path
+import org.http4s.headers.`Content-Type`
 import org.scalacheck.Arbitrary
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.Gen
+import scala.jdk.CollectionConverters.*
 
 trait Generators {
+  def byteStreamGen[F[_]]: Gen[Stream[F, Byte]] =
+    arbitrary[Array[Byte]]
+      .filter(_.nonEmpty)
+      .map(Chunk.array(_))
+      .map(Stream.chunk(_))
+
   implicit def byteStreamArbitrary[F[_]]: Arbitrary[Stream[F, Byte]] =
-    Arbitrary(
-      arbitrary[Array[Byte]]
-        .filter(_.nonEmpty)
-        .map(Chunk.array(_))
-        .map(Stream.chunk(_))
-    )
+    Arbitrary(byteStreamGen[F])
+
+  val contentTypeGen: Gen[`Content-Type`] =
+    for {
+      mediaType <- Gen.oneOf(MediaType.application.all)
+      charsets = java.nio.charset.Charset.availableCharsets.values.asScala.toList
+      charset <- Gen.option(Gen.oneOf(charsets.map(Charset.fromNioCharset)))
+    } yield `Content-Type`(mediaType, charset)
+
+  implicit val contentTypeArbitrary: Arbitrary[`Content-Type`] =
+    Arbitrary(contentTypeGen)
 
   val s3BucketGen: Gen[S3Bucket] =
     for {

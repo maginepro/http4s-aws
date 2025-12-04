@@ -20,6 +20,7 @@ import cats.effect.IO
 import fs2.Stream
 import munit.CatsEffectSuite
 import munit.ScalaCheckEffectSuite
+import org.http4s.headers.`Content-Type`
 import org.scalacheck.effect.PropF
 
 final class S3MultipartUploadSuite
@@ -38,9 +39,38 @@ final class S3MultipartUploadSuite
         Stream
           .eval(localStack)
           .evalTap(_.createBucket(bucket))
-          .flatMap(_.multipartUpload(bucket, key)(bytes))
+          .flatMap(_.multipartUpload.uploadTo(bucket, key)(bytes))
           .compile
           .drain
+    }
+  }
+
+  test("multipartUpload.contentType") {
+    PropF.forAllNoShrinkF {
+      (
+        bucket: S3Bucket,
+        key: S3Key,
+        contentType: `Content-Type`,
+        bytes: Stream[IO, Byte]
+      ) =>
+        Stream
+          .eval(localStack)
+          .evalTap(_.createBucket(bucket))
+          .evalTap(localStack =>
+            bytes
+              .through(
+                localStack.multipartUpload
+                  .withContentType(contentType)
+                  .uploadTo(bucket, key)
+              )
+              .compile
+              .drain
+          )
+          .evalMap(_.getContentType(bucket, key))
+          .compile
+          .onlyOrError
+          .assertEquals(Some(contentType))
+
     }
   }
 }
