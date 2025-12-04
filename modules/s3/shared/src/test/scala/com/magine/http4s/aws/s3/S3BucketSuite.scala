@@ -16,7 +16,6 @@
 
 package com.magine.http4s.aws.s3
 
-import com.comcast.ip4s.Ipv4Address
 import munit.ScalaCheckSuite
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.Gen
@@ -152,7 +151,9 @@ final class S3BucketSuite extends ScalaCheckSuite {
       if name.head.isLetterOrDigit
       if name.last.isLetterOrDigit
       if !name.contains("..")
-      if Ipv4Address.fromString(name).isEmpty
+      if !name.contains(".-") && !name.contains("-.")
+      // The IP-address filter here rejects some valid names
+      if !name.forall(c => c.isDigit || c == '.')
       if !name.startsWith("xn--")
       if !name.startsWith("sthree-")
       if !name.startsWith("amzn-s3-demo-")

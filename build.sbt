@@ -7,7 +7,6 @@ val circeVersion = "0.14.15"
 val fs2DataVersion = "1.12.0"
 val fs2Version = "3.12.2"
 val http4sVersion = "0.23.33"
-val ip4sVersion = "3.7.0"
 val literallyVersion = "1.2.0"
 val munitCatsEffectVersion = "2.1.0"
 val scala213Version = "2.13.18"
@@ -101,7 +100,6 @@ lazy val s3 = crossProject(JVMPlatform, JSPlatform)
     name := "http4s-aws-s3",
     libraryDependencies ++= Seq(
       "co.fs2" %%% "fs2-core" % fs2Version,
-      "com.comcast" %%% "ip4s-core" % ip4sVersion,
       "com.magine" %%% "aws-regions" % awsRegionsVersion,
       "io.circe" %%% "circe-core" % circeVersion,
       "org.gnieh" %%% "fs2-data-text" % fs2DataVersion,

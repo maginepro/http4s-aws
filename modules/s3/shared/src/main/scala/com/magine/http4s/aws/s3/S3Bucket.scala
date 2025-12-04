@@ -19,10 +19,10 @@ package com.magine.http4s.aws.s3
 import cats.Hash
 import cats.Show
 import cats.syntax.all.*
-import com.comcast.ip4s.Ipv4Address
 import io.circe.Decoder
 import io.circe.Encoder
 import org.http4s.Uri.Path.SegmentEncoder
+import scala.util.matching.Regex
 
 /**
   * A name of an Amazon S3 general purpose bucket.
@@ -119,6 +119,9 @@ object S3Bucket {
   private def hasNoDashNextToPeriod(name: String): Boolean =
     !name.contains(".-") && !name.contains("-.")
 
+  private val ipAddressRegex: Regex =
+    """^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$""".r
+
   /**
     * Returns `true` if the following name rule is
     * true for the specified name; `false` otherwise.
@@ -126,7 +129,7 @@ object S3Bucket {
     * - Bucket names must not be formatted as an IP address (for example, `192.168.5.4`).
     */
   private def isNotAnIpAddress(name: String): Boolean =
-    Ipv4Address.fromString(name).isEmpty
+    !ipAddressRegex.matches(name)
 
   /**
     * Returns `true` if the following naming rules are
