@@ -32,6 +32,13 @@ import org.http4s.Uri.Path.SegmentEncoder
   *
   * - Buckets used with Amazon S3 Transfer Acceleration can't have periods (`.`) in their names.
   *
+  * In addition, the following rule is checked.
+  *
+  * - Bucket names must not contain a dash next to a period.
+  *
+  * The rule is not included in the linked bucket naming
+  * rules, but is enforced in practice.
+  *
   * @see https://docs.aws.amazon.com/AmazonS3/latest/userguide/bucketnamingrules.html
   */
 sealed abstract case class S3Bucket(name: String)
@@ -63,6 +70,7 @@ object S3Bucket {
       hasValidChars(name) &&
       hasValidStartAndEndChars(name) &&
       hasNoTwoAdjacentPeriods(name) &&
+      hasNoDashNextToPeriod(name) &&
       isNotAnIpAddress(name) &&
       hasValidPrefixAndSuffix(name)
 
@@ -82,7 +90,7 @@ object S3Bucket {
     * - Bucket names can consist only of lowercase letters, numbers, periods (`.`), and hyphens (`-`).
     */
   private def hasValidChars(name: String): Boolean =
-    name.forall(c => c.isLetterOrDigit || c == '.' || c == '-')
+    name.forall(c => c.isLower || c.isDigit || c == '.' || c == '-')
 
   /**
     * Returns `true` if the following name rule is
@@ -101,6 +109,15 @@ object S3Bucket {
     */
   private def hasNoTwoAdjacentPeriods(name: String): Boolean =
     !name.contains("..")
+
+  /**
+    * Returns `true` if the following name rule is
+    * true for the specified name; `false` otherwise.
+    *
+    * - Bucket names must not contain a dash next to a period.
+    */
+  private def hasNoDashNextToPeriod(name: String): Boolean =
+    !name.contains(".-") && !name.contains("-.")
 
   /**
     * Returns `true` if the following name rule is

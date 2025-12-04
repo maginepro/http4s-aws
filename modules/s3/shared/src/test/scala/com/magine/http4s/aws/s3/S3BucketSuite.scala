@@ -137,11 +137,11 @@ final class S3BucketSuite extends ScalaCheckSuite {
     Gen.oneOf('.', '-')
 
   private val invalidCharGen: Gen[Char] =
-    arbitrary[Char].filterNot(c => c.isLetterOrDigit || c == '.' || c == '-')
+    arbitrary[Char].filterNot(c => c.isLower || c.isDigit || c == '.' || c == '-')
 
   private val validCharGen: Gen[Char] =
     Gen.frequency(
-      9 -> Gen.alphaNumChar,
+      9 -> Gen.oneOf(Gen.alphaLowerChar, Gen.numChar),
       1 -> periodOrDashGen
     )
 
