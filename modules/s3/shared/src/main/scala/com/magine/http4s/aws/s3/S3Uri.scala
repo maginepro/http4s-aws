@@ -50,6 +50,20 @@ trait S3Uri {
 object S3Uri {
 
   /**
+    * Returns a new [[S3Uri]] instance which generates
+    * `Uri`s for Amazon S3 using the provided function.
+    */
+  def apply(uri: (S3Bucket, S3Key, Region) => Uri): S3Uri =
+    new S3Uri {
+      override def apply(
+        bucket: S3Bucket,
+        key: S3Key,
+        region: Region
+      ): Uri =
+        uri(bucket, key, region)
+    }
+
+  /**
     * Generates `Uri`s for Amazon S3 for path-style requests.
     *
     * The path-style `Uri`s use the following format.
@@ -59,25 +73,20 @@ object S3Uri {
     * @see https://docs.aws.amazon.com/AmazonS3/latest/userguide/VirtualHosting.html#path-style-access
     */
   val pathStyle: S3Uri =
-    new S3Uri {
-      override def apply(
-        bucket: S3Bucket,
-        key: S3Key,
-        region: Region
-      ): Uri =
-        Uri(
-          scheme = Some(Scheme.https),
-          authority = Some(
-            Authority(
-              userInfo = None,
-              host = Uri.RegName(s"s3.$region.amazonaws.com"),
-              port = None,
-            )
-          ),
-          path = (Path.Root / bucket).concat(key.path),
-          query = Query.empty,
-          fragment = None
-        )
+    S3Uri { case (bucket, key, region) =>
+      Uri(
+        scheme = Some(Scheme.https),
+        authority = Some(
+          Authority(
+            userInfo = None,
+            host = Uri.RegName(s"s3.$region.amazonaws.com"),
+            port = None,
+          )
+        ),
+        path = (Path.Root / bucket).concat(key.path),
+        query = Query.empty,
+        fragment = None
+      )
     }
 
   /**
@@ -90,24 +99,19 @@ object S3Uri {
     * @see https://docs.aws.amazon.com/AmazonS3/latest/userguide/VirtualHosting.html#virtual-hosted-style-access
     */
   val virtualHostedStyle: S3Uri =
-    new S3Uri {
-      override def apply(
-        bucket: S3Bucket,
-        key: S3Key,
-        region: Region
-      ): Uri =
-        Uri(
-          scheme = Some(Scheme.https),
-          authority = Some(
-            Authority(
-              userInfo = None,
-              host = Uri.RegName(s"${bucket.name}.s3.$region.amazonaws.com"),
-              port = None,
-            )
-          ),
-          path = key.path,
-          query = Query.empty,
-          fragment = None
-        )
+    S3Uri { case (bucket, key, region) =>
+      Uri(
+        scheme = Some(Scheme.https),
+        authority = Some(
+          Authority(
+            userInfo = None,
+            host = Uri.RegName(s"${bucket.name}.s3.$region.amazonaws.com"),
+            port = None,
+          )
+        ),
+        path = key.path,
+        query = Query.empty,
+        fragment = None
+      )
     }
 }
