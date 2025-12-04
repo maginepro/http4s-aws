@@ -13,6 +13,7 @@ val scala213Version = "2.13.18"
 val scala3Version = "3.3.7"
 val scalaCheckEffectMunitVersion = "2.1.0-RC1"
 val scodecVersion = "1.2.4"
+val testcontainersVersion = "2.0.2"
 val vaultVersion = "3.6.0"
 
 inThisBuild(
@@ -106,6 +107,7 @@ lazy val s3 = crossProject(JVMPlatform, JSPlatform)
       "org.gnieh" %%% "fs2-data-xml" % fs2DataVersion,
       "org.http4s" %%% "http4s-client" % http4sVersion,
       "org.http4s" %%% "http4s-core" % http4sVersion,
+      "org.http4s" %%% "http4s-ember-client" % http4sVersion % Test,
       "org.scodec" %%% "scodec-bits" % scodecVersion,
       "org.typelevel" %%% "cats-core" % catsVersion,
       "org.typelevel" %%% "cats-effect-kernel" % catsEffectVersion,
@@ -120,4 +122,10 @@ lazy val s3 = crossProject(JVMPlatform, JSPlatform)
   )
   .jsSettings(
     scalaJSLinkerConfig ~= (_.withModuleKind(ModuleKind.CommonJSModule))
+  )
+  .jvmSettings(
+    Test / fork := true,
+    libraryDependencies ++= Seq(
+      "org.testcontainers" % "testcontainers-localstack" % testcontainersVersion % Test
+    )
   )
