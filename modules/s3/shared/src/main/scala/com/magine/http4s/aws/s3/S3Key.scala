@@ -61,9 +61,9 @@ object S3Key {
     Show.show(_.path.renderString)
 
   private def fromPathNormalized(path: Uri.Path): Either[InvalidS3Key, S3Key] =
-    if (path.nonEmpty && utf8Length(path) <= 1024)
-      Right(new S3Key(path) {})
-    else Left(InvalidS3Key(path))
+    if (path.isEmpty) Left(InvalidS3Key.Empty(path))
+    else if (utf8Length(path) > 1024) Left(InvalidS3Key.TooLong(path))
+    else Right(new S3Key(path) {})
 
   private def utf8Length(path: Uri.Path): Int =
     path.renderString.getBytes(UTF_8).length

@@ -25,11 +25,11 @@ import org.scalacheck.Prop
 
 final class S3KeySuite extends ScalaCheckSuite {
   test("empty") {
-    checkInvalid(Path.empty)
+    checkInvalid(Path.empty, InvalidS3Key.Empty(_))
   }
 
   test("normalize.invalid") {
-    checkInvalid(path"///")
+    checkInvalid(path"///", InvalidS3Key.Empty(_))
   }
 
   test("normalize.valid") {
@@ -37,7 +37,7 @@ final class S3KeySuite extends ScalaCheckSuite {
   }
 
   test("root") {
-    checkInvalid(Path.Root)
+    checkInvalid(Path.Root, InvalidS3Key.Empty(_))
   }
 
   test("tooLong") {
@@ -48,7 +48,7 @@ final class S3KeySuite extends ScalaCheckSuite {
         path = Path.unsafeFromString(chars.mkString)
       } yield path
 
-    Prop.forAll(gen)(checkInvalid)
+    Prop.forAll(gen)(checkInvalid(_, InvalidS3Key.TooLong(_)))
   }
 
   test("valid") {
@@ -62,8 +62,8 @@ final class S3KeySuite extends ScalaCheckSuite {
     Prop.forAll(gen)(checkValid)
   }
 
-  private def checkInvalid(path: Path): Unit =
-    assert(S3Key(path).isLeft)
+  private def checkInvalid(path: Path, error: Path => InvalidS3Key): Unit =
+    assertEquals(S3Key(path), Left(error(path.normalize)))
 
   private def checkValid(path: Path): Unit =
     assert(S3Key(path).isRight)

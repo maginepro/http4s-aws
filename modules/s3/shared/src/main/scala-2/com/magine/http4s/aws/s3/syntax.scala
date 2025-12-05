@@ -49,7 +49,7 @@ object syntax {
               q"_root_.com.magine.http4s.aws.s3.S3Key(_root_.org.http4s.Uri.Path.unsafeFromString($s)).toOption.get"
             )
           )
-        case Left(_) => Left("invalid S3Key")
+        case Left(e) => Left(s"invalid S3Key: ${e.details}")
       }
     }
 

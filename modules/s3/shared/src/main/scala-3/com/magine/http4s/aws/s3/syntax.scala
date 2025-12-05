@@ -48,7 +48,7 @@ object syntax {
     ) =
       S3Key(Uri.Path.unsafeFromString(s)) match {
         case Right(_) => Right('{ S3Key(Uri.Path.unsafeFromString(${ Expr(s) })).toOption.get })
-        case Left(_) => Left("invalid S3Key")
+        case Left(e) => Left(s"invalid S3Key: ${e.details}")
       }
   }
 }

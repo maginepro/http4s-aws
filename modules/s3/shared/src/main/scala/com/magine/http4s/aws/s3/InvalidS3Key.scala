@@ -16,10 +16,36 @@
 
 package com.magine.http4s.aws.s3
 
-import org.http4s.Uri
+import java.nio.charset.StandardCharsets.UTF_8
+import org.http4s.Uri.Path
 import scala.util.control.NoStackTrace
 
-final case class InvalidS3Key(path: Uri.Path) extends RuntimeException with NoStackTrace {
-  override def getMessage: String =
-    s"Invalid S3Key: $path"
+sealed abstract class InvalidS3Key(val path: Path) extends RuntimeException with NoStackTrace {
+  def details: String
+
+  override final def getMessage: String =
+    message
+
+  def message: String =
+    s"Invalid S3Key: $path: $details"
+}
+
+object InvalidS3Key {
+  def unapply(invalid: InvalidS3Key): Some[Path] =
+    Some(invalid.path)
+
+  private[s3] final case class Empty(override val path: Path) extends InvalidS3Key(path) {
+    override def details: String =
+      "the path is empty"
+
+    override def message: String =
+      s"Invalid S3Key: $details"
+  }
+
+  private[s3] final case class TooLong(override val path: Path) extends InvalidS3Key(path) {
+    override def details: String = {
+      val utf8Length = path.renderString.getBytes(UTF_8).length
+      s"the path length in UTF-8 bytes ($utf8Length bytes) exceeds the maximum allowed length (1024 bytes)"
+    }
+  }
 }
