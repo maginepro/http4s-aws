@@ -22,6 +22,18 @@ import org.scalacheck.Gen
 import org.scalacheck.Prop
 
 final class S3BucketSuite extends ScalaCheckSuite {
+  test("dashNextToPeriod") {
+    val gen =
+      for {
+        length <- Gen.chooseNum(1, 61)
+        chars <- Gen.listOfN(length, validCharGen)
+        index <- Gen.chooseNum(0, length - 1)
+        patch <- Gen.oneOf(".-", "-.")
+      } yield chars.mkString.patch(index, patch, 0)
+
+    Prop.forAll(gen)(checkInvalid)
+  }
+
   test("empty") {
     checkInvalid("")
   }
@@ -85,7 +97,7 @@ final class S3BucketSuite extends ScalaCheckSuite {
   test("ipAddress") {
     val gen =
       Gen
-        .listOfN(4, Gen.chooseNum(0, 255))
+        .listOfN(4, Gen.chooseNum(0, 999))
         .map(_.mkString("."))
 
     Prop.forAll(gen)(checkInvalid)
