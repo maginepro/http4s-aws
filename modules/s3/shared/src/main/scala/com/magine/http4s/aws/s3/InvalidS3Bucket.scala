@@ -31,6 +31,9 @@ sealed abstract class InvalidS3Bucket(val name: String) extends RuntimeException
 }
 
 object InvalidS3Bucket {
+  def unapply(invalid: InvalidS3Bucket): Some[String] =
+    Some(invalid.name)
+
   private[s3] final case class AdjacentPeriods(override val name: String) extends InvalidS3Bucket(name) {
     override def details: String =
       s"the bucket name must not contain two adjacent periods"
