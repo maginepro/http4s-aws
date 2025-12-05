@@ -142,11 +142,6 @@ object S3Bucket {
     * - Bucket names must not start with the prefix `xn--`.
     * - Bucket names must not start with the prefix `sthree-`.
     * - Bucket names must not start with the prefix `amzn-s3-demo-`.
-    * - Bucket names must not end with the suffix `-s3alias`.
-    * - Bucket names must not end with the suffix `--ol-s3`.
-    * - Bucket names must not end with the suffix `.mrap`.
-    * - Bucket names must not end with the suffix `--x-s3`.
-    * - Bucket names must not end with the suffix `--table-s3`.
     */
   private def checkPrefix(name: String): ValidatedNel[InvalidS3Bucket, Unit] =
     if (
@@ -173,9 +168,6 @@ object S3Bucket {
       * Returns `Valid` if the following naming rules are
       * true for the specified name; `Invalid` otherwise.
       *
-      * - Bucket names must not start with the prefix `xn--`.
-      * - Bucket names must not start with the prefix `sthree-`.
-      * - Bucket names must not start with the prefix `amzn-s3-demo-`.
       * - Bucket names must not end with the suffix `-s3alias`.
       * - Bucket names must not end with the suffix `--ol-s3`.
       * - Bucket names must not end with the suffix `.mrap`.
