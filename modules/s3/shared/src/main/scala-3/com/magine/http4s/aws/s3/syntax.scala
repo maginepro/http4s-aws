@@ -36,7 +36,8 @@ object syntax {
     ) =
       S3Bucket(s) match {
         case Right(_) => Right('{ S3Bucket(${ Expr(s) }).toOption.get })
-        case Left(_) => Left("invalid S3Bucket")
+        case Left(e: InvalidS3Bucket.Multiple) => Left(s"invalid S3Bucket:\n${e.details}")
+        case Left(e) => Left(s"invalid S3Bucket: ${e.details}")
       }
   }
 
