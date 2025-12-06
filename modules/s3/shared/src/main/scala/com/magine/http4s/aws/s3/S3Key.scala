@@ -19,37 +19,66 @@ package com.magine.http4s.aws.s3
 import cats.Hash
 import cats.Show
 import cats.syntax.all.*
+import com.magine.http4s.aws.AwsUriEncoding
 import io.circe.Decoder
 import io.circe.Encoder
 import java.nio.charset.StandardCharsets.UTF_8
-import org.http4s.Uri
+import org.http4s.Uri.Path
 
 /**
-  * An object key (or key name) which uniquely
-  * identifies an object in an Amazon S3 bucket.
+  * An object key (or key name) which uniquely identifies
+  * an object in an Amazon S3 bucket.
   *
-  * The object key name must be non-empty and is
-  * not allowed to exceed 1,024 UTF-8 bytes.
+  * The object key name must be non-empty and is not
+  * allowed to exceed 1,024 UTF-8 bytes.
   *
-  * Note key names are normalized (empty segments
-  * removed) during the creation of [[S3Key]]s.
+  * When [[S3Key]]s are created, paths are normalized and
+  * encoded using [[AwsUriEncoding]]. If this is unwanted,
+  * use one of the following alternatives.
+  *
+  * - If paths are already encoded, use [[S3Key.fromPathEncoded]].
+  * - If paths are also normalized, use [[S3Key.fromPathUnmodified]].
   *
   * @see https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-keys.html
   */
-sealed abstract case class S3Key(path: Uri.Path)
+sealed abstract case class S3Key(path: Path)
 
 object S3Key {
-  def apply(path: Uri.Path): Either[InvalidS3Key, S3Key] =
+
+  /**
+    * Alias for [[S3Key.fromPath]].
+    */
+  def apply(path: Path): Either[InvalidS3Key, S3Key] =
     fromPath(path)
 
-  def fromPath(path: Uri.Path): Either[InvalidS3Key, S3Key] =
-    fromPathNormalized(path.normalize)
+  /**
+    * Returns a new [[S3Key]] for the specified path with
+    * encoding and normalization; or an [[InvalidS3Key]]
+    * if the path is not a valid key.
+    */
+  def fromPath(path: Path): Either[InvalidS3Key, S3Key] =
+    fromPathEncoded(AwsUriEncoding.uriEncodePath(path))
+
+  /**
+    * Returns a new [[S3Key]] for the specified path without
+    * encoding but with normalization; or an [[InvalidS3Key]]
+    * if the path is not a valid key.
+    */
+  def fromPathEncoded(path: Path): Either[InvalidS3Key, S3Key] =
+    fromPathUnmodified(path.normalize)
+
+  /**
+    * Returns a new [[S3Key]] for the specified path without
+    * normalization or encoding; or an [[InvalidS3Key]] if
+    * the path is not a valid key.
+    */
+  def fromPathUnmodified(path: Path): Either[InvalidS3Key, S3Key] =
+    if (path.isEmpty) Left(InvalidS3Key.Empty(path))
+    else if (utf8Length(path) > 1024) Left(InvalidS3Key.TooLong(path))
+    else Right(new S3Key(path) {})
 
   implicit val s3KeyDecoder: Decoder[S3Key] =
-    Decoder[String].emap(s =>
-      fromPath(Uri.Path.unsafeFromString(s))
-        .leftMap(_.getMessage)
-    )
+    Decoder[String].emap(s => fromPath(Path.unsafeFromString(s)).leftMap(_.getMessage))
 
   implicit val s3KeyEncoder: Encoder[S3Key] =
     Encoder[String].contramap(_.path.renderString)
@@ -60,11 +89,6 @@ object S3Key {
   implicit val s3KeyShow: Show[S3Key] =
     Show.show(_.path.renderString)
 
-  private def fromPathNormalized(path: Uri.Path): Either[InvalidS3Key, S3Key] =
-    if (path.isEmpty) Left(InvalidS3Key.Empty(path))
-    else if (utf8Length(path) > 1024) Left(InvalidS3Key.TooLong(path))
-    else Right(new S3Key(path) {})
-
-  private def utf8Length(path: Uri.Path): Int =
+  private def utf8Length(path: Path): Int =
     path.renderString.getBytes(UTF_8).length
 }

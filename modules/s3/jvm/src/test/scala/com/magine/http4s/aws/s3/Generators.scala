@@ -67,11 +67,23 @@ trait Generators {
   implicit val s3BucketArbitrary: Arbitrary[S3Bucket] =
     Arbitrary(s3BucketGen)
 
+  /** Reserved characters for percent-encoding, excluding `/`. */
+  private val reservedCharGen: Gen[Char] =
+    Gen.oneOf('!', '#', '$', '&', '\'', '(', ')', '*', '+', ',', ':', ';', '=', '?', '@', '[', ']')
+
   val s3KeyGen: Gen[S3Key] =
     for {
-      length <- Gen.chooseNum(1, 1024)
-      chars <- Gen.listOfN(length, Gen.alphaNumChar)
-      path = Path.unsafeFromString(chars.mkString)
+      length <- Gen.chooseNum(1, 1021)
+      chars <- Gen.listOfN(
+        length,
+        Gen.frequency(
+          19 -> Gen.alphaNumChar,
+          1 -> Gen.const('/'),
+        )
+      )
+      index <- Gen.chooseNum(0, length - 1)
+      reserved <- reservedCharGen.map(_.toString)
+      path = Path.unsafeFromString(chars.mkString.patch(index, reserved, 0))
       key <- S3Key(path).map(Gen.const).getOrElse(Gen.fail)
     } yield key
 

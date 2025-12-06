@@ -28,6 +28,13 @@ final class S3KeySuite extends ScalaCheckSuite {
     checkInvalid(Path.empty, InvalidS3Key.Empty(_))
   }
 
+  test("encode") {
+    assertEquals(
+      S3Key(path"test#123.txt").map(_.path),
+      Right(path"test%23123.txt")
+    )
+  }
+
   test("normalize.invalid") {
     checkInvalid(path"///", InvalidS3Key.Empty(_))
   }
