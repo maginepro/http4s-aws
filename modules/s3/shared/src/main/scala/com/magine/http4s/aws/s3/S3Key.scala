@@ -77,8 +77,16 @@ object S3Key {
     else if (utf8Length(path) > 1024) Left(InvalidS3Key.TooLong(path))
     else Right(new S3Key(path) {})
 
+  /**
+    * Returns a new [[S3Key]] for the specified path with
+    * encoding and normalization; or an [[InvalidS3Key]]
+    * if the path is not a valid key.
+    */
+  def fromString(path: String): Either[InvalidS3Key, S3Key] =
+    fromPath(Path.unsafeFromString(path))
+
   implicit val s3KeyDecoder: Decoder[S3Key] =
-    Decoder[String].emap(s => fromPath(Path.unsafeFromString(s)).leftMap(_.getMessage))
+    Decoder[String].emap(fromString(_).leftMap(_.getMessage))
 
   implicit val s3KeyEncoder: Encoder[S3Key] =
     Encoder[String].contramap(_.path.renderString)
