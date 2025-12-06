@@ -29,12 +29,13 @@ import java.nio.charset.StandardCharsets.UTF_8
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 import scala.util.chaining.*
+import scodec.bits.ByteVector
 
 private[aws] final case class Signature(value: String)
 
 private[aws] object Signature {
   def sign[F[_]: Hashing: MonadCancelThrow](key: Chunk[Byte], bytes: Chunk[Byte]): F[Signature] =
-    signWithKey(key, bytes).map(hash => Signature(Hex.encodeHex(hash.bytes.toArray)))
+    signWithKey(key, bytes).map(hash => Signature(hash.bytes.toByteVector.toHex))
 
   def signingContent[F[_]: Hashing: MonadCancelThrow](
     canonicalRequest: CanonicalRequest,
@@ -61,8 +62,8 @@ private[aws] object Signature {
     Hashing[F].hasher(HashAlgorithm.SHA256).use { hasher =>
       for {
         _ <- hasher.update(chunk)
-        hash <- hasher.hash.map(_.bytes.toArray)
-      } yield Hex.encodeHex(hash)
+        hash <- hasher.hash.map(_.bytes.toByteVector.toHex)
+      } yield hash
     }
 
   def signingContentPayload[F[_]: Hashing: MonadCancelThrow](
@@ -112,7 +113,7 @@ private[aws] object Signature {
     val algorithm: String = "HmacSHA256"
 
     def sign(key: SecretKeySpec, bytes: Array[Byte]): Signature =
-      Signature(Hex.encodeHex(signWithKey(key, bytes)))
+      Signature(ByteVector.view(signWithKey(key, bytes)).toHex)
 
     def signingContent(
       canonicalRequest: CanonicalRequest,

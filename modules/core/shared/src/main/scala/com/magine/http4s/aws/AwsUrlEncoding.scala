@@ -16,11 +16,8 @@
 
 package com.magine.http4s.aws
 
-import java.lang.StringBuffer
-import java.net.URLEncoder
-import java.util.regex.Pattern
-
-object AwsUrlEncoding {
+/* TODO: Remove for 7.0 release. */
+private[aws] object AwsUrlEncoding {
 
   /**
     * Encode a `String` for use in the path of a URL.
@@ -32,7 +29,7 @@ object AwsUrlEncoding {
     * @return
     */
   def urlEncode(s: String): String =
-    urlEncode(s, path = false)
+    AwsUriEncoding.uriEncode(s)
 
   /**
     * Encode a `String` representing the path of a URL.
@@ -42,30 +39,5 @@ object AwsUrlEncoding {
     * used instead, so `/` is encoded.
     */
   def urlEncodePath(s: String): String =
-    urlEncode(s, path = true)
-
-  private val replacements: Pattern =
-    s"${Pattern.quote("+")}|${Pattern.quote("*")}|${Pattern.quote("%7E")}|${Pattern.quote("%2F")}".r.pattern
-
-  private def urlEncode(s: String, path: Boolean): String = {
-    val encoded = URLEncoder.encode(s, "UTF-8")
-    val output = new StringBuffer(encoded.length)
-    val matcher = replacements.matcher(encoded)
-
-    while (matcher.find()) {
-      val _ = matcher.appendReplacement(
-        output,
-        matcher.group(0) match {
-          case "+" => "%20"
-          case "*" => "%2A"
-          case "%7E" => "~"
-          case "%2F" if path => "/"
-          case "%2F" => "%2F"
-        }
-      )
-    }
-
-    matcher.appendTail(output)
-    output.toString
-  }
+    AwsUriEncoding.uriEncodePath(s)
 }
