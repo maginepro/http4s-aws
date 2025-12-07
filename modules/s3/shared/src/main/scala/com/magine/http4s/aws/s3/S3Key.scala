@@ -52,6 +52,12 @@ object S3Key {
     fromPath(path)
 
   /**
+    * Alias for [[S3Key.fromString]].
+    */
+  def apply(path: String): Either[InvalidS3Key, S3Key] =
+    fromString(path)
+
+  /**
     * Returns a new [[S3Key]] for the specified path with
     * encoding and normalization; or an [[InvalidS3Key]]
     * if the path is not a valid key.
