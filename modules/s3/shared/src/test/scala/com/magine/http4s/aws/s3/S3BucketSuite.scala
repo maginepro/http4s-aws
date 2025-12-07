@@ -16,6 +16,8 @@
 
 package com.magine.http4s.aws.s3
 
+import cats.parse.Numbers
+import cats.parse.Parser
 import com.magine.http4s.aws.s3.syntax.*
 import munit.ScalaCheckSuite
 import org.scalacheck.Arbitrary.arbitrary
@@ -164,6 +166,15 @@ final class S3BucketSuite extends ScalaCheckSuite {
       1 -> periodOrDashGen
     )
 
+  private val ipAddressParser: Parser[String] = {
+    val group = Numbers.digit.rep(1, 3)
+    val dot = Parser.char('.')
+    group.repSep(4, 4, dot).string
+  }
+
+  private def isIpAddress(name: String): Boolean =
+    ipAddressParser.parseAll(name).isRight
+
   private val validGen: Gen[String] =
     for {
       length <- Gen.chooseNum(3, 63)
@@ -172,7 +183,7 @@ final class S3BucketSuite extends ScalaCheckSuite {
       if name.last.isLetterOrDigit
       if !name.contains("..")
       if !name.contains(".-") && !name.contains("-.")
-      // The IP-address filter here rejects some valid names
+      if !isIpAddress(name)
       if !name.forall(c => c.isDigit || c == '.')
       if !name.startsWith("xn--")
       if !name.startsWith("sthree-")

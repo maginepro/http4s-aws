@@ -20,7 +20,6 @@ import fs2.Chunk
 import fs2.Stream
 import org.http4s.Charset
 import org.http4s.MediaType
-import org.http4s.Uri.Path
 import org.http4s.headers.`Content-Type`
 import org.scalacheck.Arbitrary
 import org.scalacheck.Arbitrary.arbitrary
@@ -83,7 +82,7 @@ trait Generators {
       )
       index <- Gen.chooseNum(0, length - 1)
       reserved <- reservedCharGen.map(_.toString)
-      path = Path.unsafeFromString(chars.mkString.patch(index, reserved, 0))
+      path = chars.mkString.patch(index, reserved, 0)
       key <- S3Key(path).map(Gen.const).getOrElse(Gen.fail)
     } yield key
 
