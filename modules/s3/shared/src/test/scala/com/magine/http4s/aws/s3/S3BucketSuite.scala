@@ -16,6 +16,7 @@
 
 package com.magine.http4s.aws.s3
 
+import com.magine.http4s.aws.s3.syntax.*
 import munit.ScalaCheckSuite
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.Gen
@@ -101,6 +102,13 @@ final class S3BucketSuite extends ScalaCheckSuite {
         .map(_.mkString("."))
 
     Prop.forAll(gen)(checkInvalid)
+  }
+
+  test("syntax") {
+    assertEquals(
+      S3Bucket("example-123.bucket"),
+      Right(bucket"example-123.bucket")
+    )
   }
 
   test("tooLong") {

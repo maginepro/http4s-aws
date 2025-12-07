@@ -16,7 +16,6 @@
 
 package com.magine.http4s.aws.s3
 
-import org.http4s.Uri
 import org.typelevel.literally.Literally
 
 object syntax {
@@ -47,8 +46,8 @@ object syntax {
     )(
       using Quotes
     ) =
-      S3Key(Uri.Path.unsafeFromString(s)) match {
-        case Right(_) => Right('{ S3Key(Uri.Path.unsafeFromString(${ Expr(s) })).toOption.get })
+      S3Key(s) match {
+        case Right(_) => Right('{ S3Key(${ Expr(s) }).toOption.get })
         case Left(e) => Left(s"invalid S3Key: ${e.details}")
       }
   }

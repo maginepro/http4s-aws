@@ -16,7 +16,6 @@
 
 package com.magine.http4s.aws.s3
 
-import org.http4s.Uri
 import org.typelevel.literally.Literally
 
 object syntax {
@@ -43,11 +42,11 @@ object syntax {
   object S3KeyLiteral extends Literally[S3Key] {
     def validate(c: Context)(s: String) = {
       import c.universe._
-      S3Key(Uri.Path.unsafeFromString(s)) match {
+      S3Key(s) match {
         case Right(_) =>
           Right(
             c.Expr(
-              q"_root_.com.magine.http4s.aws.s3.S3Key(_root_.org.http4s.Uri.Path.unsafeFromString($s)).toOption.get"
+              q"_root_.com.magine.http4s.aws.s3.S3Key($s).toOption.get"
             )
           )
         case Left(e) => Left(s"invalid S3Key: ${e.details}")

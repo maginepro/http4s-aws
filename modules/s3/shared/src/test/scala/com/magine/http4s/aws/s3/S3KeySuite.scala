@@ -30,8 +30,8 @@ final class S3KeySuite extends ScalaCheckSuite {
 
   test("encode") {
     assertEquals(
-      S3Key(path"test#123.txt").map(_.path),
-      Right(path"test%23123.txt")
+      key"test#123.txt".path,
+      path"test%23123.txt"
     )
   }
 
