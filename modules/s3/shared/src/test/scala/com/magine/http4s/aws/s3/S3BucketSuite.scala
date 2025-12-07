@@ -184,7 +184,6 @@ final class S3BucketSuite extends ScalaCheckSuite {
       if !name.contains("..")
       if !name.contains(".-") && !name.contains("-.")
       if !isIpAddress(name)
-      if !name.forall(c => c.isDigit || c == '.')
       if !name.startsWith("xn--")
       if !name.startsWith("sthree-")
       if !name.startsWith("amzn-s3-demo-")
