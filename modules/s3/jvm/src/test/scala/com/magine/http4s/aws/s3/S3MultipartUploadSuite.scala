@@ -21,6 +21,7 @@ import fs2.Stream
 import munit.CatsEffectSuite
 import munit.ScalaCheckEffectSuite
 import org.http4s.headers.`Content-Type`
+import org.scalacheck.Test.Parameters
 import org.scalacheck.effect.PropF
 
 final class S3MultipartUploadSuite
@@ -28,6 +29,9 @@ final class S3MultipartUploadSuite
   with ScalaCheckEffectSuite
   with LocalStackFixture
   with Generators {
+
+  override def scalaCheckTestParameters: Parameters =
+    super.scalaCheckTestParameters.withMinSuccessfulTests(10)
 
   test("multipartUpload") {
     PropF.forAllNoShrinkF {

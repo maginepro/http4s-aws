@@ -27,11 +27,17 @@ import org.scalacheck.Gen
 import scala.jdk.CollectionConverters.*
 
 trait Generators {
-  def byteStreamGen[F[_]]: Gen[Stream[F, Byte]] =
-    arbitrary[Array[Byte]]
-      .filter(_.nonEmpty)
-      .map(Chunk.array(_))
-      .map(Stream.chunk(_))
+  def byteStreamGen[F[_]]: Gen[Stream[F, Byte]] = {
+    val minPartSize = 5242880 // 5 MiB
+    val maxParts = 3
+
+    Gen.resize(
+      maxParts * minPartSize,
+      arbitrary[Array[Byte]].filter(_.nonEmpty).map { bytes =>
+        Stream.chunk(Chunk.array(bytes)).rechunkRandomly()
+      }
+    )
+  }
 
   implicit def byteStreamArbitrary[F[_]]: Arbitrary[Stream[F, Byte]] =
     Arbitrary(byteStreamGen[F])
