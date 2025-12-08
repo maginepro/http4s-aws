@@ -20,8 +20,8 @@ import cats.ApplicativeThrow
 import cats.effect.MonadCancelThrow
 import cats.syntax.all.*
 import com.magine.http4s.aws.AwsServiceName
-import com.magine.http4s.aws.AwsUrlEncoding.urlEncode
-import com.magine.http4s.aws.AwsUrlEncoding.urlEncodePath
+import com.magine.http4s.aws.AwsUriEncoding.uriEncode
+import com.magine.http4s.aws.AwsUriEncoding.uriEncodePath
 import com.magine.http4s.aws.headers.`X-Amz-Content-SHA256`
 import fs2.Chunk
 import fs2.hashing.HashAlgorithm
@@ -31,6 +31,7 @@ import java.security.MessageDigest
 import org.http4s.Header
 import org.http4s.Request
 import scala.util.matching.Regex
+import scodec.bits.ByteVector
 
 /**
   * Documentation: https://docs.aws.amazon.com/IAM/latest/UserGuide/create-signed-request.html
@@ -50,14 +51,14 @@ private[aws] final case class CanonicalRequest(
     Hashing[F].hasher(HashAlgorithm.SHA256).use { hasher =>
       for {
         _ <- hasher.update(Chunk.array(value.getBytes(UTF_8)))
-        hash <- hasher.hash.map(_.bytes.toArray)
-      } yield Hex.encodeHex(hash)
+        hash <- hasher.hash.map(_.bytes.toByteVector.toHex)
+      } yield hash
     }
 
   /* TODO: Remove for 7.0 release. */
   def valueHashLegacy: String = {
     val digest = MessageDigest.getInstance("SHA-256")
-    Hex.encodeHex(digest.digest(value.getBytes(UTF_8)))
+    ByteVector.view(digest.digest(value.getBytes(UTF_8))).toHex
   }
 }
 
@@ -105,17 +106,17 @@ private[aws] object CanonicalRequest {
 
   def canonicalQueryString[F[_]](request: Request[F]): String =
     request.uri.query.pairs
-      .map { case (key, value) => (urlEncode(key), value) }
+      .map { case (key, value) => (uriEncode(key), value) }
       .sortBy { case (encodedKey, _) => encodedKey }
       .map {
-        case (encodedKey, Some(value)) => s"$encodedKey=${urlEncode(value)}"
+        case (encodedKey, Some(value)) => s"$encodedKey=${uriEncode(value)}"
         case (encodedKey, None) => s"$encodedKey="
       }
       .mkString("&")
 
   def canonicalUri[F[_]](request: Request[F], serviceName: AwsServiceName): String = {
     val absolutePath = request.uri.path.toAbsolute.renderString
-    if (serviceName != AwsServiceName.S3) urlEncodePath(absolutePath) else absolutePath
+    if (serviceName != AwsServiceName.S3) uriEncodePath(absolutePath) else absolutePath
   }
 
   def httpMethod[F[_]](request: Request[F]): String =
