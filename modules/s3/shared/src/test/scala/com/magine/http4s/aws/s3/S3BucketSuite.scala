@@ -34,11 +34,11 @@ final class S3BucketSuite extends ScalaCheckSuite {
         patch <- Gen.oneOf(".-", "-.")
       } yield chars.mkString.patch(index, patch, 0)
 
-    Prop.forAll(gen)(checkInvalid)
+    Prop.forAll(gen)(checkInvalid(InvalidS3Bucket.DashNextToPeriod(_)))
   }
 
   test("empty") {
-    checkInvalid("")
+    checkInvalid(InvalidS3Bucket.InvalidLength(_))("")
   }
 
   test("invalidChars") {
@@ -50,7 +50,7 @@ final class S3BucketSuite extends ScalaCheckSuite {
         index <- Gen.chooseNum(0, length - 1)
       } yield chars.updated(index, invalid).mkString
 
-    Prop.forAll(gen)(checkInvalid)
+    Prop.forAll(gen)(checkInvalid(InvalidS3Bucket.InvalidChars(_)))
   }
 
   test("invalidEnd") {
@@ -61,7 +61,7 @@ final class S3BucketSuite extends ScalaCheckSuite {
         chars <- Gen.listOfN(length, validCharGen)
       } yield (chars :+ end).mkString
 
-    Prop.forAll(gen)(checkInvalid)
+    Prop.forAll(gen)(checkInvalid(InvalidS3Bucket.InvalidStartOrEnd(_)))
   }
 
   test("invalidPrefix") {
@@ -72,7 +72,7 @@ final class S3BucketSuite extends ScalaCheckSuite {
         chars <- Gen.listOfN(length, validCharGen)
       } yield prefix ++ chars.mkString
 
-    Prop.forAll(gen)(checkInvalid)
+    Prop.forAll(gen)(checkInvalid(InvalidS3Bucket.InvalidPrefix(_)))
   }
 
   test("invalidStart") {
@@ -83,7 +83,7 @@ final class S3BucketSuite extends ScalaCheckSuite {
         chars <- Gen.listOfN(length, validCharGen)
       } yield (start :: chars).mkString
 
-    Prop.forAll(gen)(checkInvalid)
+    Prop.forAll(gen)(checkInvalid(InvalidS3Bucket.InvalidStartOrEnd(_)))
   }
 
   test("invalidSuffix") {
@@ -94,7 +94,7 @@ final class S3BucketSuite extends ScalaCheckSuite {
         chars <- Gen.listOfN(length, validCharGen)
       } yield chars.mkString ++ suffix
 
-    Prop.forAll(gen)(checkInvalid)
+    Prop.forAll(gen)(checkInvalid(InvalidS3Bucket.InvalidSuffix(_)))
   }
 
   test("ipAddress") {
@@ -103,7 +103,7 @@ final class S3BucketSuite extends ScalaCheckSuite {
         .listOfN(4, Gen.chooseNum(0, 999))
         .map(_.mkString("."))
 
-    Prop.forAll(gen)(checkInvalid)
+    Prop.forAll(gen)(checkInvalid(InvalidS3Bucket.IpAddress(_)))
   }
 
   test("syntax") {
@@ -120,7 +120,7 @@ final class S3BucketSuite extends ScalaCheckSuite {
         chars <- Gen.listOfN(length, validCharGen)
       } yield chars.mkString
 
-    Prop.forAll(gen)(checkInvalid)
+    Prop.forAll(gen)(checkInvalid(InvalidS3Bucket.InvalidLength(_)))
   }
 
   test("tooShort") {
@@ -130,7 +130,7 @@ final class S3BucketSuite extends ScalaCheckSuite {
         chars <- Gen.listOfN(length, validCharGen)
       } yield chars.mkString
 
-    Prop.forAll(gen)(checkInvalid)
+    Prop.forAll(gen)(checkInvalid(InvalidS3Bucket.InvalidLength(_)))
   }
 
   test("twoPeriods") {
@@ -141,15 +141,23 @@ final class S3BucketSuite extends ScalaCheckSuite {
         index <- Gen.chooseNum(0, length - 1)
       } yield chars.mkString.patch(index, "..", 0)
 
-    Prop.forAll(gen)(checkInvalid)
+    Prop.forAll(gen)(checkInvalid(InvalidS3Bucket.AdjacentPeriods(_)))
   }
 
   test("valid") {
     Prop.forAll(validGen)(checkValid)
   }
 
-  private def checkInvalid(name: String): Unit =
-    assert(S3Bucket(name).isLeft)
+  private def checkInvalid(error: String => InvalidS3Bucket)(name: String): Unit =
+    S3Bucket(name) match {
+      case Left(InvalidS3Bucket.Multiple(_, errors)) =>
+        val expected = error(name)
+        assert(errors.exists(_ == expected))
+      case Left(invalid) =>
+        assertEquals(invalid, error(name))
+      case Right(bucket) =>
+        fail(s"expected ${error(name)}, got $bucket")
+    }
 
   private def checkValid(name: String): Unit =
     assert(S3Bucket(name).isRight)
