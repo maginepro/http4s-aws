@@ -1,7 +1,8 @@
 # :lock: http4s-aws
 
 Provides [http4s](https://http4s.org) request authentication using [AWS Signature Version 4](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_aws-signing.html) signing.<br>
-The library is inspired by [filosganga/http4s-aws](https://github.com/filosganga/http4s-aws) but with significant differences.
+The blog post [A Scala Alternative to AWS SDK for Java](https://vlovgr.se/posts/http4s-aws) gives an introduction.<br>
+Inspired by [filosganga/http4s-aws](https://github.com/filosganga/http4s-aws), but with significant differences.
 
 ## Usage
 
