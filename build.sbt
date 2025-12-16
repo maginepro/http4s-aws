@@ -14,7 +14,7 @@ val scala3Version = "3.3.7"
 val scalaCheckEffectMunitVersion = "2.1.0-RC1"
 val scodecVersion = "1.2.4"
 val slf4jVersion = "2.0.17"
-val testcontainersVersion = "2.0.2"
+val testcontainersVersion = "2.0.3"
 val vaultVersion = "3.6.0"
 
 inThisBuild(
