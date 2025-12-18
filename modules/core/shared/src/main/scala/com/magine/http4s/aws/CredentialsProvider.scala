@@ -49,6 +49,8 @@ import org.http4s.Method
 import org.http4s.Request
 import org.http4s.Uri
 import org.http4s.client.Client
+import org.http4s.client.middleware.Retry
+import org.http4s.client.middleware.RetryPolicy
 import org.typelevel.ci.*
 import scala.annotation.nowarn
 import scala.concurrent.duration.*
@@ -147,8 +149,14 @@ object CredentialsProvider {
     * active credentials available, it will continue to return the
     * active credentials while trying to refresh, until the
     * credentials expire in 1 minute or less.
+    *
+    * There is a retry policy in place to avoid intermittent
+    * issues when requesting credentials.
     */
   def containerEndpoint[F[_]: Async](client: Client[F]): Resource[F, CredentialsProvider[F]] = {
+    val retryClient: Client[F] =
+      Retry(RetryPolicy(RetryPolicy.exponentialBackoff(maxWait = 3.seconds, maxRetry = 5)))(client)
+
     def credentialsUri: F[Uri] =
       for {
         path <- ContainerCredentialsRelativeUri[F].read
@@ -182,7 +190,7 @@ object CredentialsProvider {
         authorizationToken = ContainerAuthorizationToken[F].read
         authorization <- authorizationTokenFile.getOrElse(authorizationToken)
         request = Request[F](Method.GET, uri).withHeaders(authorization)
-        expiring <- client.expect[ExpiringCredentials](request)
+        expiring <- retryClient.expect[ExpiringCredentials](request)
       } yield expiring
 
     def sleepUntilRefresh(ref: Ref[F, Either[Throwable, ExpiringCredentials]]): F[Unit] =
