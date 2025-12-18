@@ -49,6 +49,8 @@ import org.http4s.Method
 import org.http4s.Request
 import org.http4s.Uri
 import org.http4s.client.Client
+import org.http4s.client.middleware.Retry
+import org.http4s.client.middleware.RetryPolicy
 import org.typelevel.ci.*
 import scala.annotation.nowarn
 import scala.concurrent.duration.*
@@ -147,8 +149,14 @@ object CredentialsProvider {
     * active credentials available, it will continue to return the
     * active credentials while trying to refresh, until the
     * credentials expire in 1 minute or less.
+    *
+    * There is a retry policy in place to avoid intermittent
+    * issues when requesting credentials.
     */
   def containerEndpoint[F[_]: Async](client: Client[F]): Resource[F, CredentialsProvider[F]] = {
+    val retryClient: Client[F] =
+      Retry(RetryPolicy(RetryPolicy.exponentialBackoff(maxWait = 3.seconds, maxRetry = 5)))(client)
+
     def credentialsUri: F[Uri] =
       for {
         path <- ContainerCredentialsRelativeUri[F].read
@@ -173,7 +181,7 @@ object CredentialsProvider {
         .map(_.trim)
         .map(Header.Raw(ci"Authorization", _))
 
-    def requestCredentials(retryAttempts: Int = 0, maxRetries: Int = 5): F[ExpiringCredentials] =
+    def requestCredentials: F[ExpiringCredentials] =
       for {
         uri <- credentialsUri
         authorizationTokenFile <- ContainerAuthorizationTokenFile[F].read
@@ -182,10 +190,7 @@ object CredentialsProvider {
         authorizationToken = ContainerAuthorizationToken[F].read
         authorization <- authorizationTokenFile.getOrElse(authorizationToken)
         request = Request[F](Method.GET, uri).withHeaders(authorization)
-        expiring <- client.expect[ExpiringCredentials](request).recoverWith {
-          case _ if retryAttempts < maxRetries =>
-            requestCredentials(retryAttempts + 1)
-        }
+        expiring <- retryClient.expect[ExpiringCredentials](request)
       } yield expiring
 
     def sleepUntilRefresh(ref: Ref[F, Either[Throwable, ExpiringCredentials]]): F[Unit] =
@@ -203,7 +208,7 @@ object CredentialsProvider {
     def refreshCredentials(ref: Ref[F, Either[Throwable, ExpiringCredentials]]): F[Unit] =
       for {
         _ <- sleepUntilRefresh(ref)
-        credentials <- requestCredentials().attempt
+        credentials <- requestCredentials.attempt
         now <- Async[F].realTime.map(d => Instant.EPOCH.plusNanos(d.toNanos))
         _ <- ref.update {
           case right @ Right(existing) if credentials.isLeft && existing.isFresh(now) => right
@@ -212,7 +217,7 @@ object CredentialsProvider {
       } yield ()
 
     for {
-      credentials <- requestCredentials().attempt.toResource
+      credentials <- requestCredentials.attempt.toResource
       ref <- Ref[F].of(credentials).toResource
       _ <- refreshCredentials(ref).foreverM[Unit].background
     } yield new CredentialsProvider[F] {
