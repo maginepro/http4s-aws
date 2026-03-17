@@ -1,6 +1,6 @@
 val awsRegionsVersion = "1.0.1"
 val caseInsensitiveVersion = "1.5.0"
-val catsEffectVersion = "3.6.3"
+val catsEffectVersion = "3.7.0"
 val catsParseVersion = "1.1.0"
 val catsVersion = "2.13.0"
 val circeVersion = "0.14.15"
