@@ -15,7 +15,7 @@ val scalaCheckEffectMunitVersion = "2.1.0"
 val scodecVersion = "1.2.4"
 val slf4jVersion = "2.0.17"
 val testcontainersVersion = "2.0.3"
-val vaultVersion = "3.6.0"
+val vaultVersion = "3.7.0"
 
 inThisBuild(
   Seq(
