@@ -36,7 +36,7 @@ trait LocalStackFixture extends CatsEffectSuite {
       Resource.make {
         IO.blocking {
           val container =
-            new LocalStackContainer("localstack/localstack:s3-latest")
+            new LocalStackContainer("localstack/localstack:s3-community-archive")
               .withServices("s3")
           container.start()
           container
