@@ -5,7 +5,7 @@ val catsParseVersion = "1.1.0"
 val catsVersion = "2.13.0"
 val circeVersion = "0.14.15"
 val fs2DataVersion = "1.12.1"
-val fs2Version = "3.12.2"
+val fs2Version = "3.13.0"
 val http4sVersion = "0.23.33"
 val literallyVersion = "1.2.0"
 val munitCatsEffectVersion = "2.2.0"
@@ -15,7 +15,7 @@ val scalaCheckEffectMunitVersion = "2.1.0"
 val scodecVersion = "1.2.4"
 val slf4jVersion = "2.0.17"
 val testcontainersVersion = "2.0.3"
-val vaultVersion = "3.6.0"
+val vaultVersion = "3.7.0"
 
 inThisBuild(
   Seq(
