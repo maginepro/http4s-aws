@@ -17,13 +17,14 @@
 package com.magine.http4s.aws.s3
 
 import com.magine.http4s.aws.s3.syntax.*
+import io.circe.syntax.*
 import munit.ScalaCheckSuite
 import org.http4s.Uri.Path
 import org.http4s.syntax.all.*
 import org.scalacheck.Gen
 import org.scalacheck.Prop
 
-final class S3KeySuite extends ScalaCheckSuite {
+final class S3KeySuite extends ScalaCheckSuite with Generators {
   test("empty") {
     checkInvalid(Path.empty, InvalidS3Key.Empty(_))
   }
@@ -33,6 +34,10 @@ final class S3KeySuite extends ScalaCheckSuite {
       key"test#123.txt".path,
       path"test%23123.txt"
     )
+  }
+
+  test("json") {
+    Prop.forAll((key: S3Key) => assertEquals(key.asJson.as[S3Key], Right(key)))
   }
 
   test("normalize.invalid") {

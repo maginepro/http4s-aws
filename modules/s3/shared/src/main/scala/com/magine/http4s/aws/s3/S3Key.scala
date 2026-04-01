@@ -92,7 +92,9 @@ object S3Key {
     fromPath(Path.unsafeFromString(path))
 
   implicit val s3KeyDecoder: Decoder[S3Key] =
-    Decoder[String].emap(fromString(_).leftMap(_.getMessage))
+    Decoder[String]
+      .map(Path.unsafeFromString)
+      .emap(fromPathEncoded(_).leftMap(_.getMessage))
 
   implicit val s3KeyEncoder: Encoder[S3Key] =
     Encoder[String].contramap(_.path.renderString)
