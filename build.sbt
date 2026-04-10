@@ -1,4 +1,4 @@
-val awsRegionsVersion = "1.0.1"
+val awsRegionsVersion = "1.1.0"
 val caseInsensitiveVersion = "1.5.0"
 val catsEffectVersion = "3.7.0"
 val catsParseVersion = "1.1.0"
@@ -6,7 +6,7 @@ val catsVersion = "2.13.0"
 val circeVersion = "0.14.15"
 val fs2DataVersion = "1.13.0"
 val fs2Version = "3.13.0"
-val http4sVersion = "0.23.33"
+val http4sVersion = "0.23.34"
 val literallyVersion = "1.2.0"
 val munitCatsEffectVersion = "2.2.0"
 val scala213Version = "2.13.18"
@@ -25,8 +25,10 @@ inThisBuild(
       tlGitHubDev("jesperoman", "Jesper Öman"),
       tlGitHubDev("vlovgr", "Viktor Rudebeck")
     ),
+    githubWorkflowBuildPreamble ++= nativeBrewInstallWorkflowSteps.value,
     githubWorkflowJavaVersions := Seq(JavaSpec.temurin("17")),
     githubWorkflowTargetBranches := Seq("**"),
+    nativeBrewInstallCond := Some("matrix.project == 'rootNative'"),
     licenses := Seq(License.Apache2),
     mimaBinaryIssueFilters ++= {
       import com.typesafe.tools.mima.core._
@@ -65,7 +67,7 @@ inThisBuild(
 lazy val root = tlCrossRootProject
   .aggregate(core, s3)
 
-lazy val core = crossProject(JVMPlatform, JSPlatform)
+lazy val core = crossProject(JVMPlatform, JSPlatform, NativePlatform)
   .in(file("modules/core"))
   .settings(
     name := "http4s-aws",
@@ -96,8 +98,13 @@ lazy val core = crossProject(JVMPlatform, JSPlatform)
     tlVersionIntroduced := List("2.13", "3").map(_ -> "6.2.0").toMap,
     scalaJSLinkerConfig ~= (_.withModuleKind(ModuleKind.CommonJSModule))
   )
+  .nativeEnablePlugins(ScalaNativeBrewedConfigPlugin)
+  .nativeSettings(
+    tlVersionIntroduced := List("2.13", "3").map(_ -> "6.5.0").toMap,
+    Test / nativeBrewFormulas += "openssl"
+  )
 
-lazy val s3 = crossProject(JVMPlatform, JSPlatform)
+lazy val s3 = crossProject(JVMPlatform, JSPlatform, NativePlatform)
   .in(file("modules/s3"))
   .dependsOn(core)
   .settings(
@@ -132,4 +139,9 @@ lazy val s3 = crossProject(JVMPlatform, JSPlatform)
       "org.slf4j" % "slf4j-nop" % slf4jVersion % Test,
       "org.testcontainers" % "testcontainers-localstack" % testcontainersVersion % Test
     )
+  )
+  .nativeEnablePlugins(ScalaNativeBrewedConfigPlugin)
+  .nativeSettings(
+    tlVersionIntroduced := List("2.13", "3").map(_ -> "6.5.0").toMap,
+    Test / nativeBrewFormulas += "openssl"
   )
