@@ -13,7 +13,7 @@ val scala213Version = "2.13.18"
 val scala3Version = "3.3.7"
 val scalaCheckEffectMunitVersion = "2.1.0"
 val scodecVersion = "1.2.5"
-val slf4jVersion = "2.0.17"
+val slf4jVersion = "2.0.18"
 val testcontainersVersion = "2.0.5"
 val vaultVersion = "3.7.0"
 
