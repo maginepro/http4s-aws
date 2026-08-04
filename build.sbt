@@ -29,6 +29,13 @@ inThisBuild(
     githubWorkflowOSes := Seq("ubuntu-latest"),
     githubWorkflowJavaVersions := Seq(JavaSpec.temurin("17")),
     githubWorkflowTargetBranches := Seq("**"),
+    githubWorkflowBuildPreamble := Seq(
+      WorkflowStep.Run(
+        commands = List("/home/linuxbrew/.linuxbrew/bin/brew update"),
+        name = Some("Update brew"),
+        cond = Some("(matrix.project == 'rootNative') && startsWith(matrix.os, 'ubuntu')")
+      )
+    ) ++ githubWorkflowBuildPreamble.value,
     nativeBrewInstallCond := Some("matrix.project == 'rootNative'"),
     licenses := Seq(License.Apache2),
     mimaBinaryIssueFilters ++= {
