@@ -34,12 +34,18 @@ private[aws] final case class AwsProfile(
   roleArn: Option[AwsProfile.RoleArn],
   roleSessionName: Option[AwsProfile.RoleSessionName],
   durationSeconds: Option[AwsProfile.DurationSeconds],
-  sourceProfile: AwsProfileName,
-  mfaSerial: MfaSerial,
-  region: Option[Region]
+  sourceProfile: Option[AwsProfileName],
+  mfaSerial: Option[MfaSerial],
+  region: Option[Region],
+  ssoAccountId: Option[AwsSsoAccountId],
+  ssoRoleName: Option[AwsSsoRoleName],
+  ssoSessionName: Option[AwsSsoSessionName]
 ) {
-  def resolve[F[_]: Sync]: F[AwsProfileResolved] =
-    AwsProfileResolved.fromProfile(this)
+  def resolveSts[F[_]: Sync]: F[AwsStsProfileResolved] =
+    AwsStsProfileResolved.fromProfile(this)
+
+  def resolveSso[F[_]: Sync]: F[AwsSsoProfileResolved] =
+    AwsSsoProfileResolved.fromProfile(this)
 }
 
 private[aws] object AwsProfile {
@@ -86,9 +92,12 @@ private[aws] object AwsProfile {
       decode.optional("role_arn", RoleArn(_).asRight),
       decode.optional("role_session_name", RoleSessionName(_).asRight),
       decode.optional("duration_seconds", DurationSeconds.parse(_)),
-      decode.required("source_profile", AwsProfileName(_).asRight),
-      decode.required("mfa_serial", MfaSerial(_).asRight),
-      decode.optional("region", Region.parse(_))
+      decode.optional("source_profile", AwsProfileName(_).asRight),
+      decode.optional("mfa_serial", MfaSerial(_).asRight),
+      decode.optional("region", Region.parse(_)),
+      decode.optional("sso_account_id", AwsSsoAccountId(_).asRight),
+      decode.optional("sso_role_name", AwsSsoRoleName(_).asRight),
+      decode.optional("sso_session", AwsSsoSessionName(_).asRight)
     ).mapN(apply).toEither.leftMap(parseError(profileName))
   }
 

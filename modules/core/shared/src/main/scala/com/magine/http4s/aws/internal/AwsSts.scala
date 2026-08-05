@@ -92,15 +92,16 @@ private[aws] object AwsSts {
 
         request.toResource.flatMap(client.run).use {
           case Successful(response) =>
-            AwsCredentialsCache.FileName[F](roleArn, roleSessionName, durationSeconds, mfaSerial).flatMap {
-              cacheFileName =>
+            AwsCredentialsCache.FileName
+              .forSts[F](roleArn, roleSessionName, durationSeconds, mfaSerial)
+              .flatMap { cacheFileName =>
                 AssumeRoleResponse
                   .entityDecoder(cacheFileName)
                   .decode(response, strict = false)
                   .leftWiden[Throwable]
                   .rethrowT
                   .map(_.value)
-            }
+              }
 
           case response =>
             AssumeRoleErrorResponse.entityDecoder

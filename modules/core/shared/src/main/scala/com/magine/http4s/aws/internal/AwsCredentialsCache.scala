@@ -41,7 +41,9 @@ import java.nio.charset.StandardCharsets.UTF_8
   * Capability to read and write credentials in `~/.aws/cli/cache`.
   */
 private[aws] trait AwsCredentialsCache[F[_]] {
-  def read(profile: AwsProfileResolved): F[Option[AwsAssumedRole]]
+  def readSts(profile: AwsStsProfileResolved): F[Option[AwsAssumedRole]]
+
+  def readSso(profile: AwsSsoProfileResolved): F[Option[AwsSsoCredentials]]
 
   def write(assumedRole: AwsAssumedRole): F[Unit]
 }
@@ -63,8 +65,8 @@ private[aws] object AwsCredentialsCache {
       private def writeFile(path: Path, json: Json): F[Unit] =
         Stream(json.spaces2).through(files.writeUtf8(path)).compile.drain
 
-      override def read(profile: AwsProfileResolved): F[Option[AwsAssumedRole]] =
-        FileName.fromProfile(profile).flatMap { fileName =>
+      override def readSts(profile: AwsStsProfileResolved): F[Option[AwsAssumedRole]] =
+        FileName.fromStsProfile(profile).flatMap { fileName =>
           cachePath.map(_.resolve(fileName.path)).flatMap { path =>
             implicit val decoder: Decoder[AwsAssumedRole] =
               AwsAssumedRole.decoder(fileName)
@@ -79,6 +81,22 @@ private[aws] object AwsCredentialsCache {
           }
         }
 
+      override def readSso(profile: AwsSsoProfileResolved): F[Option[AwsSsoCredentials]] =
+        FileName.fromSsoProfile(profile).flatMap { fileName =>
+          cachePath.map(_.resolve(fileName.path)).flatMap { path =>
+            implicit val decoder: Decoder[AwsSsoCredentials] =
+              AwsSsoCredentials.decoder(fileName)
+
+            files
+              .readAll(path)
+              .through(utf8.decode)
+              .compile
+              .string
+              .flatMap(decode[AwsSsoCredentials](_).map(_.some).liftTo[F])
+              .recover { case _: NoSuchFileException => none }
+          }
+        }
+
       override def write(assumedRole: AwsAssumedRole): F[Unit] =
         existingCachePath
           .map(_.resolve(assumedRole.cacheFileName.path))
@@ -88,22 +106,26 @@ private[aws] object AwsCredentialsCache {
   def empty[F[_]: Sync]: F[AwsCredentialsCache[F]] =
     Ref[F].of(Map.empty[FileName, AwsAssumedRole]).map(fromRef[F])
 
-  def one[F[_]: Sync](profile: AwsProfileResolved, assumedRole: AwsAssumedRole): F[AwsCredentialsCache[F]] =
+  def one[F[_]: Sync](profile: AwsStsProfileResolved, assumedRole: AwsAssumedRole)
+    : F[AwsCredentialsCache[F]] =
     for {
-      fileName <- FileName.fromProfile(profile)
+      fileName <- FileName.fromStsProfile(profile)
       ref <- Ref[F].of(Map(fileName -> assumedRole))
     } yield fromRef(ref)
 
   def option[F[_]: Sync](
-    profile: AwsProfileResolved,
+    profile: AwsStsProfileResolved,
     assumedRole: Option[AwsAssumedRole]
   ): F[AwsCredentialsCache[F]] =
     assumedRole.map(one(profile, _)).getOrElse(empty)
 
   def fromRef[F[_]: Sync](ref: Ref[F, Map[FileName, AwsAssumedRole]]): AwsCredentialsCache[F] =
     new AwsCredentialsCache[F] {
-      override def read(profile: AwsProfileResolved): F[Option[AwsAssumedRole]] =
-        FileName.fromProfile(profile).flatMap(fileName => ref.get.map(_.get(fileName)))
+      override def readSts(profile: AwsStsProfileResolved): F[Option[AwsAssumedRole]] =
+        FileName.fromStsProfile(profile).flatMap(fileName => ref.get.map(_.get(fileName)))
+
+      override def readSso(profile: AwsSsoProfileResolved): F[Option[AwsSsoCredentials]] =
+        none.pure
 
       override def write(assumedRole: AwsAssumedRole): F[Unit] =
         ref.update(_.updated(assumedRole.cacheFileName, assumedRole))
@@ -124,7 +146,7 @@ private[aws] object AwsCredentialsCache {
       * the same way as done by the `aws` cli, although this
       * is subject to change.
       */
-    def apply[F[_]: Sync](
+    def forSts[F[_]: Sync](
       roleArn: AwsProfile.RoleArn,
       roleSessionName: AwsProfile.RoleSessionName,
       durationSeconds: Option[AwsProfile.DurationSeconds],
@@ -155,12 +177,38 @@ private[aws] object AwsCredentialsCache {
       hash.map(hash => new FileName(Path(s"$hash.json")) {})
     }
 
-    def fromProfile[F[_]: Sync](profile: AwsProfileResolved): F[FileName] =
-      FileName(
+    def forSso[F[_]: Sync](
+      accountId: AwsSsoAccountId,
+      roleName: AwsSsoRoleName,
+      sessionName: AwsSsoSessionName
+    ): F[FileName] = {
+      val json =
+        JsonObject
+          .fromIterable(
+            List(
+              Some("accountId" -> accountId.value.asJson),
+              Some("roleName" -> roleName.value.asJson),
+              Some("sessionName" -> sessionName.value.asJson)
+            ).flatten
+          )
+          .toJson
+
+      sha1Hex(json.noSpaces).map(hash => new FileName(Path(s"$hash.json")) {})
+    }
+
+    def fromStsProfile[F[_]: Sync](profile: AwsStsProfileResolved): F[FileName] =
+      FileName.forSts(
         roleArn = profile.roleArn,
         roleSessionName = profile.roleSessionName,
         durationSeconds = profile.durationSeconds,
         mfaSerial = profile.mfaSerial
+      )
+
+    def fromSsoProfile[F[_]: Sync](profile: AwsSsoProfileResolved): F[FileName] =
+      FileName.forSso(
+        accountId = profile.ssoAccountId,
+        roleName = profile.ssoRoleName,
+        sessionName = profile.ssoSessionName
       )
 
     private def sha1Hex[F[_]: Sync](s: String): F[String] =
