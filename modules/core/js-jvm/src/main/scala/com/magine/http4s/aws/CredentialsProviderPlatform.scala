@@ -30,8 +30,8 @@ import cats.syntax.all.*
 import com.magine.http4s.aws.internal.AwsAssumedRole
 import com.magine.http4s.aws.internal.AwsConfig
 import com.magine.http4s.aws.internal.AwsCredentialsCache
-import com.magine.http4s.aws.internal.AwsProfileResolved
 import com.magine.http4s.aws.internal.AwsSts
+import com.magine.http4s.aws.internal.AwsStsProfileResolved
 import com.magine.http4s.aws.internal.ExpiringCredentials
 import com.magine.http4s.aws.internal.IniFile
 import com.magine.http4s.aws.internal.Setting.*
@@ -399,7 +399,7 @@ private[aws] trait CredentialsProviderPlatform {
   ): F[CredentialsProvider[F]] =
     for {
       profileName <- Profile.readOrDefault
-      profile <- AwsConfig.default.read(profileName).flatMap(_.resolve)
+      profile <- AwsConfig.default.read(profileName).flatMap(_.resolveSts)
       provider <- credentialsFileAsync(profile.sourceProfile)
       securityTokenService <- securityTokenService(
         profile = profile,
@@ -416,7 +416,7 @@ private[aws] trait CredentialsProviderPlatform {
   ): F[CredentialsProvider[F]] =
     for {
       profileName <- Profile.readOrDefault
-      profile <- AwsConfig.default.read(profileName).flatMap(_.resolve)
+      profile <- AwsConfig.default.read(profileName).flatMap(_.resolveSts)
       provider <- credentialsFileAsync(profile.sourceProfile)
       securityTokenService <- securityTokenService(
         profile = profile,
@@ -482,7 +482,7 @@ private[aws] trait CredentialsProviderPlatform {
     profileName: AwsProfileName
   ): F[CredentialsProvider[F]] =
     for {
-      profile <- AwsConfig.default.read(profileName).flatMap(_.resolve)
+      profile <- AwsConfig.default.read(profileName).flatMap(_.resolveSts)
       provider <- credentialsFileAsync(profile.sourceProfile)
       securityTokenService <- securityTokenService(
         profile = profile,
@@ -499,7 +499,7 @@ private[aws] trait CredentialsProviderPlatform {
     profileName: AwsProfileName
   ): F[CredentialsProvider[F]] =
     for {
-      profile <- AwsConfig.default.read(profileName).flatMap(_.resolve)
+      profile <- AwsConfig.default.read(profileName).flatMap(_.resolveSts)
       provider <- credentialsFileAsync(profile.sourceProfile)
       securityTokenService <- securityTokenService(
         profile = profile,
@@ -515,7 +515,7 @@ private[aws] trait CredentialsProviderPlatform {
     tokenCodeProvider: TokenCodeProvider[F]
   ): F[CredentialsProvider[F]] =
     for {
-      profile <- AwsConfig.default.read(profileName).flatMap(_.resolve)
+      profile <- AwsConfig.default.read(profileName).flatMap(_.resolveSts)
       provider <- credentialsFileAsync(profile.sourceProfile)
       securityTokenService <- securityTokenService(
         profile = profile,
@@ -533,7 +533,7 @@ private[aws] trait CredentialsProviderPlatform {
     tokenCodeProvider: TokenCodeProvider[F]
   ): F[CredentialsProvider[F]] =
     for {
-      profile <- AwsConfig.default.read(profileName).flatMap(_.resolve)
+      profile <- AwsConfig.default.read(profileName).flatMap(_.resolveSts)
       provider <- credentialsFileAsync(profile.sourceProfile)
       securityTokenService <- securityTokenService(
         profile = profile,
@@ -544,7 +544,7 @@ private[aws] trait CredentialsProviderPlatform {
     } yield securityTokenService
 
   private[aws] def securityTokenService[F[_]](
-    profile: AwsProfileResolved,
+    profile: AwsStsProfileResolved,
     tokenCodeProvider: TokenCodeProvider[F],
     credentialsCache: AwsCredentialsCache[F],
     sts: AwsSts[F]
@@ -557,7 +557,7 @@ private[aws] trait CredentialsProviderPlatform {
     case class Cached(assumedRole: Option[AwsAssumedRole]) extends State
     case class Renewing(deferred: Deferred[F, Result]) extends State
 
-    credentialsCache.read(profile).map(Cached(_)).flatMap(Ref[F].of[State](_)).map { ref =>
+    credentialsCache.readSts(profile).map(Cached(_)).flatMap(Ref[F].of[State](_)).map { ref =>
       new CredentialsProvider[F] {
         sealed trait Action {
           def run(poll: Poll[F]): F[Credentials]

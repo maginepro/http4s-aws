@@ -21,7 +21,10 @@ import com.magine.aws.Region
 import com.magine.http4s.aws.internal.AwsAssumedRole
 import com.magine.http4s.aws.internal.AwsCredentialsCache
 import com.magine.http4s.aws.internal.AwsProfile
-import com.magine.http4s.aws.internal.AwsProfileResolved
+import com.magine.http4s.aws.internal.AwsSsoAccountId
+import com.magine.http4s.aws.internal.AwsSsoRoleName
+import com.magine.http4s.aws.internal.AwsSsoSessionName
+import com.magine.http4s.aws.internal.AwsStsProfileResolved
 import java.time.Instant
 import org.scalacheck.Arbitrary
 import org.scalacheck.Arbitrary.arbitrary
@@ -64,15 +67,36 @@ package object aws {
   implicit val awsProfileNameArbitrary: Arbitrary[AwsProfileName] =
     Arbitrary(awsProfileNameGen)
 
+  val awsSsoAccountIdGen: Gen[AwsSsoAccountId] =
+    arbitrary[String].map(AwsSsoAccountId(_))
+
+  implicit val awsSsoAccountIdArbitrary: Arbitrary[AwsSsoAccountId] =
+    Arbitrary(awsSsoAccountIdGen)
+
+  val awsSsoRoleNameGen: Gen[AwsSsoRoleName] =
+    arbitrary[String].map(AwsSsoRoleName(_))
+
+  implicit val awsSsoRoleNameArbitrary: Arbitrary[AwsSsoRoleName] =
+    Arbitrary(awsSsoRoleNameGen)
+
+  val awsSsoSessionNameGen: Gen[AwsSsoSessionName] =
+    arbitrary[String].map(AwsSsoSessionName(_))
+
+  implicit val awsSsoSessionNameArbitrary: Arbitrary[AwsSsoSessionName] =
+    Arbitrary(awsSsoSessionNameGen)
+
   val awsProfileGen: Gen[AwsProfile] =
     for {
       profileName <- arbitrary[AwsProfileName]
       roleArn <- arbitrary[Option[AwsProfile.RoleArn]]
       roleSessionName <- arbitrary[Option[AwsProfile.RoleSessionName]]
       durationSeconds <- arbitrary[Option[AwsProfile.DurationSeconds]]
-      sourceProfile <- arbitrary[AwsProfileName]
-      mfaSerial <- arbitrary[MfaSerial]
+      sourceProfile <- arbitrary[Option[AwsProfileName]]
+      mfaSerial <- arbitrary[Option[MfaSerial]]
       region <- arbitrary[Option[Region]]
+      ssoAccountId <- arbitrary[Option[AwsSsoAccountId]]
+      ssoRoleName <- arbitrary[Option[AwsSsoRoleName]]
+      ssoSessionName <- arbitrary[Option[AwsSsoSessionName]]
     } yield AwsProfile(
       profileName = profileName,
       roleArn = roleArn,
@@ -80,13 +104,16 @@ package object aws {
       durationSeconds = durationSeconds,
       sourceProfile = sourceProfile,
       mfaSerial = mfaSerial,
-      region = region
+      region = region,
+      ssoAccountId = ssoAccountId,
+      ssoRoleName = ssoRoleName,
+      ssoSessionName = ssoSessionName
     )
 
   implicit val awsProfileArbitrary: Arbitrary[AwsProfile] =
     Arbitrary(awsProfileGen)
 
-  val awsProfileResolvedGen: Gen[AwsProfileResolved] =
+  val awsStsProfileResolvedGen: Gen[AwsStsProfileResolved] =
     for {
       profileName <- arbitrary[AwsProfileName]
       roleArn <- arbitrary[AwsProfile.RoleArn]
@@ -95,7 +122,7 @@ package object aws {
       sourceProfile <- arbitrary[AwsProfileName]
       mfaSerial <- arbitrary[MfaSerial]
       region <- arbitrary[Region]
-    } yield AwsProfileResolved(
+    } yield AwsStsProfileResolved(
       profileName = profileName,
       roleArn = roleArn,
       roleSessionName = roleSessionName,
@@ -105,8 +132,8 @@ package object aws {
       region = region
     )
 
-  implicit val awsProfileResolvedArbitrary: Arbitrary[AwsProfileResolved] =
-    Arbitrary(awsProfileResolvedGen)
+  implicit val awsStsProfileResolvedArbitrary: Arbitrary[AwsStsProfileResolved] =
+    Arbitrary(awsStsProfileResolvedGen)
 
   val awsServiceNameGen: Gen[AwsServiceName] =
     arbitrary[String].map(AwsServiceName(_))
@@ -147,11 +174,11 @@ package object aws {
     Arbitrary(credentialsGen)
 
   /* The effect here is to capture `Hashing` possibly being unavailable. */
-  def awsCredentialsCacheFileName(profile: AwsProfileResolved): AwsCredentialsCache.FileName =
-    AwsCredentialsCache.FileName.fromProfile[SyncIO](profile).unsafeRunSync()
+  def awsCredentialsCacheFileName(profile: AwsStsProfileResolved): AwsCredentialsCache.FileName =
+    AwsCredentialsCache.FileName.fromStsProfile[SyncIO](profile).unsafeRunSync()
 
   val awsCredentialsCacheFileNameGen: Gen[AwsCredentialsCache.FileName] =
-    arbitrary[AwsProfileResolved].flatMap(awsCredentialsCacheFileName(_))
+    arbitrary[AwsStsProfileResolved].flatMap(awsCredentialsCacheFileName(_))
 
   implicit val awsCredentialsCacheFileNameArbitrary: Arbitrary[AwsCredentialsCache.FileName] =
     Arbitrary(awsCredentialsCacheFileNameGen)
@@ -168,7 +195,7 @@ package object aws {
   implicit val awsAssumedRoleAssumedRoleArnArbitrary: Arbitrary[AwsAssumedRole.AssumedRoleArn] =
     Arbitrary(awsAssumedRoleAssumedRoleArnGen)
 
-  def awsAssumedRoleGen(expiration: Instant, profile: AwsProfileResolved): Gen[AwsAssumedRole] =
+  def awsAssumedRoleGen(expiration: Instant, profile: AwsStsProfileResolved): Gen[AwsAssumedRole] =
     for {
       credentials <- arbitrary[Credentials]
       cacheFileName = awsCredentialsCacheFileName(profile)
@@ -183,7 +210,7 @@ package object aws {
     )
 
   /** AwsAssumedRole#isFresh will be `true` at epoch start. */
-  def awsAssumedRoleFreshGen(profile: AwsProfileResolved): Gen[AwsAssumedRole] =
+  def awsAssumedRoleFreshGen(profile: AwsStsProfileResolved): Gen[AwsAssumedRole] =
     for {
       expiration <- Gen
         .chooseNum(61L, Instant.MAX.getEpochSecond)
@@ -192,7 +219,7 @@ package object aws {
     } yield assumedRole
 
   /** AwsAssumedRole#isFresh will be `false` at epoch start but credentials active. */
-  def awsAssumedRoleStaleGen(profile: AwsProfileResolved): Gen[AwsAssumedRole] =
+  def awsAssumedRoleStaleGen(profile: AwsStsProfileResolved): Gen[AwsAssumedRole] =
     for {
       expiration <- Gen
         .chooseNum(1L, 60L)
@@ -201,7 +228,7 @@ package object aws {
     } yield assumedRole
 
   /** AwsAssumedRole#isFresh will be `false` at epoch start and credentials expired. */
-  def awsAssumedRoleExpiredGen(profile: AwsProfileResolved): Gen[AwsAssumedRole] =
+  def awsAssumedRoleExpiredGen(profile: AwsStsProfileResolved): Gen[AwsAssumedRole] =
     for {
       expiration <- Gen
         .chooseNum(Instant.MIN.getEpochSecond, 0L)
@@ -212,7 +239,7 @@ package object aws {
   val awsAssumedRoleGen: Gen[AwsAssumedRole] =
     for {
       expiration <- arbitrary[Instant]
-      profile <- arbitrary[AwsProfileResolved]
+      profile <- arbitrary[AwsStsProfileResolved]
       assumedRole <- awsAssumedRoleGen(expiration, profile)
     } yield assumedRole
 

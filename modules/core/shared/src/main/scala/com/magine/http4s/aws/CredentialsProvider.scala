@@ -17,7 +17,16 @@
 package com.magine.http4s.aws
 
 import cats.Applicative
+import cats.effect.Async
+import cats.effect.Ref
+import cats.effect.Temporal
 import cats.syntax.all.*
+import com.magine.http4s.aws.internal.AwsConfig
+import com.magine.http4s.aws.internal.AwsCredentialsCache
+import com.magine.http4s.aws.internal.AwsSsoCredentials
+import com.magine.http4s.aws.internal.AwsSsoProfileResolved
+import com.magine.http4s.aws.internal.Setting.Profile
+import java.time.Instant
 
 /**
   * Capability to return [[Credentials]] from one or multiple sources.
@@ -54,6 +63,72 @@ trait CredentialsProvider[F[_]] {
 }
 
 object CredentialsProvider extends CredentialsProviderPlatform {
+  def singleSignOn[F[_]: Async]: F[CredentialsProvider[F]] =
+    for {
+      profileName <- Profile.readOrDefault
+      singleSignOn <- singleSignOn(profileName)
+    } yield singleSignOn
+
+  /**
+    * Returns a new [[CredentialsProvider]] which reads temporary
+    * security credentials from the Single Sign-On (SSO) service.
+    *
+    * This provider integrates with the AWS CLI through:
+    * - reading `~/.aws/config` for profile configuration details,
+    * - reading `~/.aws/cli/cache` for temporary credentials.
+    *
+    * The `~/.aws/config` file is expected to contain a profile entry:
+    * {{{
+    * [profile ...]
+    * sso_session = ...
+    * sso_account_id = ...
+    * sso_role_name = ...
+    * }}}
+    *
+    * The provider will look for cached credentials in `~/.aws/cli/cache`
+    * and cache credentials in memory. Credentials will be returned until
+    * there is 1 minute or less left until the expiration. The provider
+    * does not support refreshing SSO credentials, but will continue to
+    * look for refreshed credentials in `~/.aws/cli/cache` once current
+    * credentials have expired.
+    *
+    * Note the `~/.aws/config` is only read once when the provider is
+    * created, so subsequent updates to the configuration are ignored.
+    */
+  def singleSignOn[F[_]: Async](profileName: AwsProfileName): F[CredentialsProvider[F]] =
+    for {
+      profile <- AwsConfig.default.read(profileName).flatMap(_.resolveSso)
+      credentialsCache = AwsCredentialsCache.default[F]
+      singleSignOn <- singleSignOn(profile, credentialsCache)
+    } yield singleSignOn
+
+  private[aws] def singleSignOn[F[_]](
+    profile: AwsSsoProfileResolved,
+    credentialsCache: AwsCredentialsCache[F]
+  )(
+    implicit F: Temporal[F]
+  ): F[CredentialsProvider[F]] =
+    Ref[F].of(Option.empty[AwsSsoCredentials]).map { ref =>
+      new CredentialsProvider[F] {
+        override def credentials: F[Credentials] =
+          for {
+            now <- Temporal[F].realTime.map(d => Instant.EPOCH.plusNanos(d.toNanos))
+            credentials <- ref.get.flatMap {
+              case Some(cached) if cached.isFresh(now) =>
+                cached.credentials.pure
+              case _ =>
+                for {
+                  cached <- credentialsCache
+                    .readSso(profile)
+                    .map(_.filter(_.isFresh(now)))
+                    .map(_.toRight(MissingCredentials()))
+                    .rethrow
+                  _ <- ref.set(cached.some)
+                } yield cached.credentials
+            }
+          } yield credentials
+      }
+    }
 
   /**
     * Returns a new [[CredentialsProvider]] which always returns

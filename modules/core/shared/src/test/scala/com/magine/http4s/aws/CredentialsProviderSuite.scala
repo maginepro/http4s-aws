@@ -37,7 +37,7 @@ final class CredentialsProviderSuite extends CatsEffectSuite with ScalaCheckEffe
   test("securityTokenService.cacheEmpty") {
     val gen =
       for {
-        profile <- awsProfileResolvedGen
+        profile <- awsStsProfileResolvedGen
         tokenCode <- tokenCodeGen
         assumedRoleFresh <- awsAssumedRoleFreshGen(profile)
       } yield (profile, tokenCode, assumedRoleFresh)
@@ -59,7 +59,7 @@ final class CredentialsProviderSuite extends CatsEffectSuite with ScalaCheckEffe
                 sts = sts(assumedRoleFresh)
               )
               credentials <- provider.credentials
-              cached <- credentialsCache.read(profile)
+              cached <- credentialsCache.readSts(profile)
               _ <- IO(assertEquals(cached, assumedRoleFresh.some))
             } yield credentials
           }
@@ -71,7 +71,7 @@ final class CredentialsProviderSuite extends CatsEffectSuite with ScalaCheckEffe
   test("securityTokenService.cacheFresh") {
     val gen =
       for {
-        profile <- awsProfileResolvedGen
+        profile <- awsStsProfileResolvedGen
         assumedRoleFresh <- awsAssumedRoleFreshGen(profile)
       } yield (profile, assumedRoleFresh)
 
@@ -88,7 +88,7 @@ final class CredentialsProviderSuite extends CatsEffectSuite with ScalaCheckEffe
               sts = stsError
             )
             credentials <- provider.credentials
-            cached <- credentialsCache.read(profile)
+            cached <- credentialsCache.readSts(profile)
             _ <- IO(assertEquals(cached, assumedRoleFresh.some))
           } yield credentials
         }
@@ -100,7 +100,7 @@ final class CredentialsProviderSuite extends CatsEffectSuite with ScalaCheckEffe
   test("securityTokenService.cacheStale") {
     val gen =
       for {
-        profile <- awsProfileResolvedGen
+        profile <- awsStsProfileResolvedGen
         tokenCode <- tokenCodeGen
         assumedRoleStale <- Gen.oneOf(
           awsAssumedRoleStaleGen(profile),
@@ -127,7 +127,7 @@ final class CredentialsProviderSuite extends CatsEffectSuite with ScalaCheckEffe
                 sts = sts(assumedRoleFresh)
               )
               credentials <- provider.credentials
-              cached <- credentialsCache.read(profile)
+              cached <- credentialsCache.readSts(profile)
               _ <- IO(assertEquals(cached, assumedRoleFresh.some))
             } yield credentials
           }
@@ -139,7 +139,7 @@ final class CredentialsProviderSuite extends CatsEffectSuite with ScalaCheckEffe
   test("securityTokenService.renewCanceled") {
     val gen =
       for {
-        profile <- awsProfileResolvedGen
+        profile <- awsStsProfileResolvedGen
         tokenCode <- tokenCodeGen
         assumedRoleStale <- Gen.option(
           Gen.oneOf(
@@ -183,7 +183,7 @@ final class CredentialsProviderSuite extends CatsEffectSuite with ScalaCheckEffe
   test("securityTokenService.renewError") {
     val gen =
       for {
-        profile <- awsProfileResolvedGen
+        profile <- awsStsProfileResolvedGen
         assumedRoleStale <- Gen.option(
           Gen.oneOf(
             awsAssumedRoleStaleGen(profile),
@@ -218,7 +218,7 @@ final class CredentialsProviderSuite extends CatsEffectSuite with ScalaCheckEffe
   test("securityTokenService.renewOnce") {
     val gen =
       for {
-        profile <- awsProfileResolvedGen
+        profile <- awsStsProfileResolvedGen
         tokenCode <- tokenCodeGen
         assumedRoleStale <- Gen.option(
           Gen.oneOf(
@@ -250,7 +250,7 @@ final class CredentialsProviderSuite extends CatsEffectSuite with ScalaCheckEffe
               )
               credentials <- List.fill(100)(provider.credentials).parSequence
               _ <- IO(assert(credentials.forall(_ == assumedRoleFresh.credentials)))
-              cached <- credentialsCache.read(profile)
+              cached <- credentialsCache.readSts(profile)
               _ <- IO(assertEquals(cached, assumedRoleFresh.some))
             } yield ()
           }
