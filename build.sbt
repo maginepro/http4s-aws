@@ -21,7 +21,6 @@ inThisBuild(
   Seq(
     crossScalaVersions := Seq(scala213Version, scala3Version),
     developers := List(
-      tlGitHubDev("janina9395", "Janina Komarova"),
       tlGitHubDev("jesperoman", "Jesper Öman"),
       tlGitHubDev("vlovgr", "Viktor Rudebeck")
     ),
